@@ -1,6 +1,6 @@
 # pdf-toolkit
 
-Inspect a PDF, compare how four Python PDF libraries see it, shrink it, or make one from an office document — from one package, one CLI.
+Inspect a PDF, compare how four Python PDF libraries see it, shrink it, split it into chapters, or make one from an office document — from one package, one CLI.
 
 [![CI](https://github.com/enonymous1/pdf-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/enonymous1/pdf-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -10,6 +10,7 @@ Inspect a PDF, compare how four Python PDF libraries see it, shrink it, or make 
 - **Inspect** — metadata, page count, scanned-vs-digital analysis, and a structural X-Ray explorer, with a unified adapter for pypdf, pdfminer.six, PyMuPDF, and pdfplumber.
 - **Compare libraries** — per-library examples in `examples/` that extract text, pages, and metadata the same way, so you can see where the libraries disagree.
 - **Find a table of contents** — outline extraction plus a text heuristic for manuals whose TOC is just printed text, with a hint page for where it starts.
+- **Split** — one PDF per chapter, by bookmarks, a `title,page` CSV, located headings, or the printed TOC text. Dry-run by default; existing outputs are never silently overwritten.
 - **Export** — convert a PDF to Markdown, HTML, DOCX, or a structured JSON report.
 - **Compress** — three methods in one engine:
   - `structural` (default): PyMuPDF garbage collection + stream deflation + clean. Text stays selectable, vectors stay sharp, nothing is rasterized.
@@ -42,6 +43,18 @@ pdf-toolkit compress document.pdf -o ./out/ -y --method ghostscript --gs-quality
 # GUI
 pdf-toolkit gui
 
+# Split into chapters (dry-run first: prints the proposed ranges)
+pdf-toolkit split document.pdf
+pdf-toolkit split document.pdf -o ./chapters/ --yes
+# From an explicit chapter list, or by locating headings in the text
+pdf-toolkit split document.pdf --csv chapters.csv --yes
+pdf-toolkit split document.pdf --headings headings.txt --yes
+# No bookmarks? Fall back to the printed TOC (--offset shifts printed
+# page numbers to physical pages when there is front matter)
+pdf-toolkit split document.pdf --toc-text --hint 2 --offset 4 --yes
+# Just dump the resolved chapter list
+pdf-toolkit split document.pdf --export-csv chapters.csv
+
 # Convert to PDF (needs pdf-toolkit[office]; see limitations below)
 pdf-toolkit convert document.docx
 pdf-toolkit convert spreadsheet.xlsx -o report.pdf
@@ -70,6 +83,11 @@ print(result.success, result.reduction_pct)
 with PyMuPDFAdapter("document.pdf") as adapter:
     print(adapter.get_metadata()["document_type"])
     print(adapter.get_toc(hint_page=6)[:3])
+
+from pdf_toolkit.splitter import extract_outline_entries, split_pdf
+
+entries, _warnings = extract_outline_entries("document.pdf")
+split_pdf("document.pdf", entries, "./chapters/")
 ```
 
 ## Install options
@@ -107,7 +125,8 @@ python -m pytest -q
 ```text
 pdf-toolkit/
 ├── src/pdf_toolkit/
-│   ├── cli.py                 # pdf-toolkit inspect / compress / gui / convert / check-format
+│   ├── cli.py                 # pdf-toolkit inspect / compress / split / gui / convert / check-format
+│   ├── splitter/              # chapter splitting by bookmarks, CSV, headings, or TOC text
 │   ├── to_pdf/                # docx/xlsx to PDF, .docx formatting checker
 │   ├── inspector/             # adapters, TOC parsers, analysis, extraction
 │   │   ├── adapters/          # pypdf, pdfminer, pymupdf, pdfplumber
@@ -123,7 +142,7 @@ pdf-toolkit/
 
 ## Known limitations
 
-- TOC outline extraction returns titles but does not yet resolve outline destinations to page numbers (the PyMuPDF text heuristic does return page numbers). See `tests/test_toc_fixture.py` for exactly what each extractor guarantees.
+- Split chunks keep the source document's metadata but not its bookmarks; each chunk starts at its chapter's first page. Printed TOC numbers are used as physical pages unless `--offset` is given, so verify the proposed ranges in the dry run before `--yes` — that check is the point of the dry run. Heading location is text-based and needs extractable text; scanned PDFs need an OCR pass first.
 - The text-TOC heuristic was tuned on printed manuals; it needs a sensible `--hint` page for documents whose contents page is not near page 6.
 - Ghostscript and tabula-py depend on external runtimes (Ghostscript, Java). If they are not installed, those paths report a clear error and the rest of the toolkit still works.
 - The GUI is not covered by automated tests (it needs a display); CI covers the CLI, the library, and the examples.
@@ -133,12 +152,13 @@ pdf-toolkit/
 
 ## History
 
-`pdf-toolkit` merges four earlier projects into one package, with a single CLI and a single dependency story:
+`pdf-toolkit` merges five earlier projects into one package, with a single CLI and a single dependency story:
 
 - `ss-py-pdf-inspector` — the inspector, its adapters, TOC parsers, dashboard, and examples. Its old tests that required a private, unshipped manual PDF were replaced with tests against a synthetic TOC fixture built in the test, and its generated example outputs were dropped.
 - `ss-pdf-small` — the CLI batch compressor. Its PyMuPDF structural pass is now the default `structural` method, and its inspect/estimate step is the compressor's preflight.
 - `ss-pdf-tool` — the PyQt6 GUI compressor. Its pypdf and Ghostscript methods are now compressor methods, and the GUI imports the package instead of reaching for a sibling file via `sys.path`.
 - `ss-toPDF` (merged in 0.2.0) — DOCX/XLSX to PDF conversion plus the .docx formatting checker. Its converters are now `pdf-toolkit convert`, and its checker is now `pdf-toolkit check-format` with the rules as parameters instead of module constants. Its example documents were real work files and are not shipped; the checker tests build synthetic documents in-test instead. The merge also fixed the original batch script, which imported three checker functions that did not exist, and removed hardcoded local paths from the checker.
+- `ss-HESI` (merged in 0.3.0) — scripts for splitting a PDF by bookmarks/TOC text, locating headings, and cleaning split filenames. Its logic is now `pdf-toolkit split` and the `pdf_toolkit.splitter` library, generalized off the one book it was built for: no hardcoded paths, one shared CSV parser and filename sanitizer, heading location in a single pass over the PDF, and the outline page resolution the inspector's TOC extractor was missing (it previously returned titles with no pages). The original's bugs are fixed, not carried over: a duplicated output write, a documented-but-unimplemented `--preview-only` flag, a TOC scan that treated every numbered line on the first ten pages as an entry, and printed page numbers silently used as physical ones. Splitting is verified against a synthetic fixture built in-test; no book content is shipped, and the source PDF is never part of this repo.
 
 Two fixes from the merge are worth knowing about: the old inspector's example metadata scripts imported a `normalize_pdf_metadata` name the package never exported (it is now an alias for `normalize_metadata`), and the old tool's module created a `pdf_compressor.log` file in the working directory on import (logging is now the caller's job, and importing the compressor has no side effects). The old projects' single-commit histories, which carried personal email addresses, were not carried over; this repo starts with a clean history under the `enonymous1` identity.
 

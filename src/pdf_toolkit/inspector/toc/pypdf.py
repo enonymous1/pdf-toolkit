@@ -30,7 +30,11 @@ def extract_toc_from_pdf(
 ) -> List[Dict]:
     """Attempt to extract a TOC for a PDF using pypdf outlines or a text fallback (pdfplumber).
 
-    Returns list of {title, page, raw} entries (may be empty).
+    Returns list of {title, page, raw} entries (may be empty). Page
+    numbers are 1-based, matching the printed TOC numbers: outline
+    destinations are resolved with ``get_destination_page_number``
+    (0-based in pypdf) and shifted by one. Entries whose destination
+    cannot be resolved keep ``page`` as None.
     """
     # try to extract PDF outlines/bookmarks via pypdf first (caller may prefer this)
     try:
@@ -38,46 +42,36 @@ def extract_toc_from_pdf(
 
         reader = PdfReader(path)
         outlines = None
-        try:
-            # pypdf may provide .outlines or get_outlines()
-            if hasattr(reader, "outlines"):
-                outlines = reader.outlines
-            elif hasattr(reader, "get_outlines"):
-                outlines = reader.get_outlines()
-        except Exception:
-            outlines = None
+        if hasattr(reader, "outline"):
+            outlines = reader.outline
+        elif hasattr(reader, "outlines"):
+            outlines = reader.outlines
+        elif hasattr(reader, "get_outlines"):
+            outlines = reader.get_outlines()
 
         entries = []
         if outlines:
-            # outlines from pypdf can be nested; flatten shallowly
+
             def _walk(o):
                 for item in o:
                     if isinstance(item, list):
                         yield from _walk(item)
                     else:
-                        # an outline dict-like / Destination
-                        title = getattr(item, "title", None) or (
-                            item.get("/Title") if isinstance(item, dict) else None
-                        )
-                        page = None
-                        try:
-                            # attempt to resolve page number from destination
-                            dest = getattr(item, "destination", None) or getattr(
-                                item, "/Dest", None
-                            )
-                            if dest is not None:
-                                # best-effort: convert to int if possible
-                                page = int(dest) if isinstance(dest, int) else None
-                        except Exception:
-                            page = None
-                        if title:
-                            entries.append({"title": str(title), "page": page, "raw": str(item)})
+                        yield item
 
-            try:
-                for e in _walk(outlines):
-                    entries.append(e)
-            except Exception:
-                entries = []
+            for item in _walk(outlines):
+                title = getattr(item, "title", None) or (
+                    item.get("/Title") if isinstance(item, dict) else None
+                )
+                page = None
+                try:
+                    page_num = reader.get_destination_page_number(item)
+                except Exception:
+                    page_num = None
+                if isinstance(page_num, int):
+                    page = page_num + 1
+                if title:
+                    entries.append({"title": str(title), "page": page, "raw": str(item)})
         if entries:
             return entries
     except Exception:

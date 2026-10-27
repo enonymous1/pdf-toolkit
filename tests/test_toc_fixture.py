@@ -8,8 +8,9 @@ shipped in this repo. It has:
   text heuristic has something to find.
 
 Honest limits of the current code, encoded in the assertions: the
-outline-based extractors return titles but do not resolve outline pages
-(page is None), while the PyMuPDF text heuristic returns integer pages.
+pypdf outline extractor now resolves outline destinations to 1-based
+pages (fixed with the ss-HESI split fold-in); the PyMuPDF text
+heuristic returns integer printed pages.
 """
 
 from pathlib import Path
@@ -68,6 +69,10 @@ def test_pypdf_outline_toc_returns_titles(fixture: Path):
     titles = [e["title"] for e in entries]
     assert "Introduction" in titles
     assert "Methods" in titles
+    pages = {e["title"]: e["page"] for e in entries}
+    assert pages["Introduction"] == 3
+    assert pages["Methods"] == 4
+    assert pages["Results"] == 5
 
 
 def test_pdfminer_outline_toc_returns_titles(fixture: Path):
