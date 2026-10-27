@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-toolkit"
-version = "0.1.0"
-description = "Inspect, compare, and compress PDFs: multi-library metadata and TOC analysis plus structural, pypdf, and Ghostscript compression, with a CLI and an optional PyQt6 GUI."
+version = "0.2.0"
+description = "Inspect, compress, and convert PDFs: multi-library metadata and TOC analysis, structural, pypdf, and Ghostscript compression, DOCX/XLSX to PDF conversion, and .docx formatting checks, with a CLI and an optional PyQt6 GUI."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -46,6 +46,12 @@ ocr = [
 export = [
     "pymupdf4llm>=0.0.10",
     "pdf2docx>=0.5.0",
+]
+office = [
+    "python-docx>=1.0.0",
+    "docx2pdf>=0.1.8",
+    "openpyxl>=3.1.0",
+    "pywin32>=306; sys_platform == 'win32'",
 ]
 dev = [
     "pytest>=8.0",

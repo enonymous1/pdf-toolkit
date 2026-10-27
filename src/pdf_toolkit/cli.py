@@ -6,6 +6,11 @@ Subcommands:
 - ``compress`` — the compressor (structural / pypdf / Ghostscript), for
   one file or a whole directory, interactively or with ``-y``.
 - ``gui`` — the PyQt6 drag-and-drop GUI (needs ``pdf-toolkit[gui]``).
+- ``convert`` — convert .docx/.xlsx files to PDF (needs
+  ``pdf-toolkit[office]``; .xlsx needs Windows with Excel, .docx needs Word).
+- ``check-format`` — check a .docx file (or a directory of them) against
+  formatting rules, optionally annotating it with Word comments
+  (needs ``pdf-toolkit[office]``; annotation needs Windows with Word).
 
 ``main()`` accepts an argument list and returns an exit code, so tests
 can call it directly; the console-script entry point exits with it.
@@ -115,6 +120,90 @@ def run_compress(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def run_convert(args: argparse.Namespace) -> int:
+    """Convert a file or directory of office documents to PDF."""
+    from .to_pdf import convert_file, convert_path
+
+    input_path = Path(args.path)
+    try:
+        if input_path.is_dir():
+            outputs = convert_path(input_path, args.output)
+        else:
+            outputs = [convert_file(input_path, args.output)]
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        return 2
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return 2
+    except ImportError as exc:
+        print(f"Error: {exc}")
+        return 1
+    for output in outputs:
+        print(f"PDF saved to {output}")
+    if not outputs:
+        print("No convertible files found.")
+    return 0
+
+
+def _check_format_rules(args: argparse.Namespace):
+    from .to_pdf import FormattingRules
+
+    return FormattingRules(
+        font=args.font,
+        body_size=args.body_size,
+        caption_size=args.caption_size,
+        footnote_size=args.footnote_size,
+        spacing=args.spacing,
+        margin_inches=args.margin,
+    )
+
+
+def run_check_format(args: argparse.Namespace) -> int:
+    """Check .docx formatting for one file or a whole directory."""
+    from .to_pdf import add_comments_to_docx, print_formatting_report
+
+    input_path = Path(args.path)
+    rules = _check_format_rules(args)
+    try:
+        if input_path.is_dir():
+            if not args.output:
+                print("Error: Checking a directory needs an output directory (-o).")
+                return 2
+            output_dir = Path(args.output)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            report_path = output_dir / "formatting_report.txt"
+            any_issues = False
+            with report_path.open("w", encoding="utf-8") as report:
+                for candidate in sorted(input_path.iterdir()):
+                    if candidate.is_file() and candidate.suffix.lower() == ".docx":
+                        issues = print_formatting_report(candidate, rules, file=report)
+                        any_issues = any_issues or bool(issues)
+                        if args.annotate:
+                            marked = output_dir / f"{candidate.stem}_markedup.docx"
+                            add_comments_to_docx(candidate, marked, issues)
+                            print(f"Annotated copy saved to {marked}")
+            print(f"Formatting report written to {report_path}")
+            return 1 if any_issues else 0
+
+        if args.report:
+            with Path(args.report).open("w", encoding="utf-8") as report:
+                issues = print_formatting_report(input_path, rules, file=report)
+            print(f"Formatting report written to {args.report}")
+        else:
+            issues = print_formatting_report(input_path, rules)
+        if args.output:
+            add_comments_to_docx(input_path, Path(args.output), issues)
+            print(f"Annotated copy saved to {args.output}")
+        return 1 if issues else 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        return 2
+    except ImportError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+
 def run_gui() -> int:
     """Launch the GUI, with a readable error if PyQt6 is missing."""
     try:
@@ -133,7 +222,7 @@ def run_gui() -> int:
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pdf-toolkit",
-        description="Inspect, compare, and compress PDFs.",
+        description="Inspect, compress, and convert PDFs, and check .docx formatting.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -167,6 +256,41 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     sub.add_parser("gui", help="Open the drag-and-drop GUI (needs pdf-toolkit[gui])")
+
+    convert_parser = sub.add_parser(
+        "convert", help="Convert .docx/.xlsx to PDF (needs pdf-toolkit[office])"
+    )
+    convert_parser.add_argument("path", help="Office file or directory to convert")
+    convert_parser.add_argument(
+        "-o",
+        "--output",
+        help="Output PDF file (single file) or output directory (directory input, required)",
+    )
+
+    check_parser = sub.add_parser(
+        "check-format", help="Check .docx formatting (needs pdf-toolkit[office])"
+    )
+    check_parser.add_argument("path", help=".docx file or directory of .docx files")
+    check_parser.add_argument(
+        "-o",
+        "--output",
+        help="Single file: annotated .docx to write. Directory: output directory (required); "
+        "the report goes there as formatting_report.txt",
+    )
+    check_parser.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Directory mode: also write *_markedup.docx copies (needs Windows with Word)",
+    )
+    check_parser.add_argument("--report", help="Single file: write the report to this file")
+    check_parser.add_argument("--font", default="Calibri", help="Required font (default: Calibri)")
+    check_parser.add_argument("--body-size", type=float, default=12.0, help="Body size in pt")
+    check_parser.add_argument("--caption-size", type=float, default=10.0, help="Caption size in pt")
+    check_parser.add_argument(
+        "--footnote-size", type=float, default=10.0, help="Footnote size in pt"
+    )
+    check_parser.add_argument("--spacing", type=float, default=1.0, help="Line spacing")
+    check_parser.add_argument("--margin", type=float, default=1.0, help="Margin in inches")
     return parser
 
 
@@ -178,6 +302,10 @@ def main(argv: list[str] | None = None) -> int:
         return run_compress(args)
     if args.command == "gui":
         return run_gui()
+    if args.command == "convert":
+        return run_convert(args)
+    if args.command == "check-format":
+        return run_check_format(args)
     return 2
 
 
