@@ -20,6 +20,7 @@ Inspect a PDF, compare how four Python PDF libraries see it, shrink it, split it
 - **GUI** — an optional PyQt6 drag-and-drop window with first-page preview, for the compressor.
 - **Convert to PDF** — `pdf-toolkit convert` turns a `.docx` or `.xlsx` file into a PDF. The `.docx` path uses docx2pdf (needs Word); the `.xlsx` path drives Excel through COM, so it needs Windows with Excel. Wide sheets go landscape automatically, very wide sheets fit to one page wide.
 - **Check .docx formatting** — `pdf-toolkit check-format` checks a Word document against formatting rules (font, body/caption/footnote sizes, line spacing, margins — all overridable on the command line) and reports every issue. With an output path it can also save an annotated copy with Word comments, which needs Windows with Word.
+- **Check citations** — `pdf-toolkit check-citations` flags DOCX manuscript text similar to a PDF source, for manual citation review. Needs `pdf-toolkit[citations]` for the DOCX reader. Similarity alone never proves a passage is uncited; matches are reported with the source page, snippet, and context for a human to judge.
 
 ## Quick start
 
@@ -78,6 +79,11 @@ pdf-toolkit check-format document.docx
 pdf-toolkit check-format document.docx --font Calibri --body-size 12 --margin 1.0
 pdf-toolkit check-format document.docx -o document-annotated.docx
 pdf-toolkit check-format ./docs/ -o ./format-check/ --annotate
+
+# Flag DOCX text similar to a PDF source (needs pdf-toolkit[citations];
+# exit 0 = no matches, 1 = matches found, 2 = usage/file error)
+pdf-toolkit check-citations manuscript.docx source.pdf --json-out report.json
+pdf-toolkit check-citations manuscript.docx source.pdf --threshold 90 --skip-cited
 ```
 
 From a checkout, the same commands work after `pip install -e ".[dev]"`, and the library API is importable directly:
@@ -119,6 +125,7 @@ reconstruct_pdf_pages("document.pdf", result.matched_pages, "./recon/")
 | `pdf-toolkit[export]` | pymupdf4llm + pdf2docx for `--export md` / `--export docx` |
 | `pdf-toolkit[office]` | python-docx + docx2pdf + openpyxl for `convert` and `check-format` (pywin32 on Windows) |
 | `pdf-toolkit[dissect]` | OpenCV + NumPy + Pillow + ReportLab + Flask + python-docx + docxtpl + pytesseract for `dissect` (Tesseract binary still needed separately for OCR labels) |
+| `pdf-toolkit[citations]` | python-docx for `check-citations` (RapidFuzz is a core dependency) |
 | `pdf-toolkit[dev]` | pytest + ruff |
 
 Optional features fail with a plain "install this extra" message instead of an import error at startup: the CLI imports Camelot, tabula, pytesseract, the export converters, and the office converters lazily, only when that feature is used.
@@ -144,9 +151,10 @@ python -m pytest -q
 ```text
 pdf-toolkit/
 ├── src/pdf_toolkit/
-│   ├── cli.py                 # pdf-toolkit inspect / compress / split / dissect / gui / convert / check-format
+│   ├── cli.py                 # pdf-toolkit inspect / compress / split / dissect / gui / convert / check-format / check-citations
 │   ├── splitter/              # chapter splitting by bookmarks, CSV, headings, or TOC text
 │   ├── dissect/               # form-page detection, field detection, reconstruction, preview server
+│   ├── citations/             # DOCX-vs-PDF similarity flagging for citation review
 │   ├── to_pdf/                # docx/xlsx to PDF, .docx formatting checker
 │   ├── inspector/             # adapters, TOC parsers, analysis, extraction
 │   │   ├── adapters/          # pypdf, pdfminer, pymupdf, pdfplumber
@@ -170,10 +178,11 @@ pdf-toolkit/
 - The formatting checker's defaults (Calibri, 12pt body / 10pt captions and footnotes, 1.0 spacing, 1-inch margins) come from the original project's style guide; they are defaults, not a standard, so pass your own values if your documents use different rules.
 - Table extraction with Camelot works best on bordered tables; unbordered tables may need the stream fallback or pdfplumber's own table finder in the examples.
 - Dissect field detection is a contour heuristic: it finds rectangular boxes, so nested boxes and unboxed fields are missed or merged, and OCR labels are one word per field. The preview server has no authentication and is confined to its `--root` directory — keep it on loopback. The original's WeasyPrint HTML-to-PDF path is not ported (it needs system Cairo/Pango libraries); filled PDFs come from `dissect fill` instead.
+- Citation checking is a similarity flag, not a plagiarism or citation verdict: it cannot tell a properly quoted or cited passage from an uncited one except for the explicit markers `--skip-cited` recognizes, it uses a lightweight sentence splitter (abbreviations can split early), and it does not read DOCX headers, footers, or footnotes. Scanned PDFs need an OCR pass first, as with the other text paths.
 
 ## History
 
-`pdf-toolkit` merges six earlier projects into one package, with a single CLI and a single dependency story:
+`pdf-toolkit` merges seven earlier projects into one package, with a single CLI and a single dependency story:
 
 - `ss-py-pdf-inspector` — the inspector, its adapters, TOC parsers, dashboard, and examples. Its old tests that required a private, unshipped manual PDF were replaced with tests against a synthetic TOC fixture built in the test, and its generated example outputs were dropped.
 - `ss-pdf-small` — the CLI batch compressor. Its PyMuPDF structural pass is now the default `structural` method, and its inspect/estimate step is the compressor's preflight.
@@ -181,6 +190,7 @@ pdf-toolkit/
 - `ss-toPDF` (merged in 0.2.0) — DOCX/XLSX to PDF conversion plus the .docx formatting checker. Its converters are now `pdf-toolkit convert`, and its checker is now `pdf-toolkit check-format` with the rules as parameters instead of module constants. Its example documents were real work files and are not shipped; the checker tests build synthetic documents in-test instead. The merge also fixed the original batch script, which imported three checker functions that did not exist, and removed hardcoded local paths from the checker.
 - `ss-HESI` (merged in 0.3.0) — scripts for splitting a PDF by bookmarks/TOC text, locating headings, and cleaning split filenames. Its logic is now `pdf-toolkit split` and the `pdf_toolkit.splitter` library, generalized off the one book it was built for: no hardcoded paths, one shared CSV parser and filename sanitizer, heading location in a single pass over the PDF, and the outline page resolution the inspector's TOC extractor was missing (it previously returned titles with no pages). The original's bugs are fixed, not carried over: a duplicated output write, a documented-but-unimplemented `--preview-only` flag, a TOC scan that treated every numbered line on the first ten pages as an entry, and printed page numbers silently used as physical ones. Splitting is verified against a synthetic fixture built in-test; no book content is shipped, and the source PDF is never part of this repo.
 - `ss-documentDissection` (merged in 0.4.0) — a pipeline for detecting templated form pages and rebuilding them as fillable HTML, PDF, and DOCX, with a Flask preview server. Its logic is now `pdf-toolkit dissect` and the `pdf_toolkit.dissect` library. The original's bugs are fixed, not carried over: fieldmaps written with `str()` and read back with `eval()` (now JSON throughout), a `--keywords` option that swallowed subcommand names (now repeatable `--keyword`), `--to-html-dir` handling nested inside the wrong subcommand and crashing without `--reconstruct-dir`, a preview server that served and wrote files relative to the working directory with no confinement (now confined to `--root`, with absolute and escaping paths rejected), a `/fill-document` endpoint that passed a filename where bytes were expected (now fills and writes), and PDF filling that only ever filled page 1. The WeasyPrint HTML-to-PDF path is not ported; no sample documents are shipped, and the original's history, which carried a personal email address, was not carried over.
+- `ss-missedCitations` (merged in 0.5.0) — a CLI comparing a DOCX manuscript against a PDF source with `thefuzz` `partial_ratio` sliding windows. Its logic is now `pdf-toolkit check-citations` and the `pdf_toolkit.citations` library, generalized off the one RFP/checklist pair it was built for: no sample documents are shipped (the original's test documents were a real RFP and a real proposal checklist), and the original's bugs are fixed, not carried over: raw-text scoring with no normalization or token prefilter, whose shipped reports were all score-100 footnote fragments (`1.`, `P.`) and whose current code finds nothing on its own sample documents; DOCX tables silently ignored; two divergent sentence splitters; an unvalidated threshold; a missing file crashing with a traceback; and tests that only ran with `PYTHONPATH=src`. The thefuzz/Levenshtein stack is replaced with RapidFuzz, and the full-page comparison fallback (which made the "best snippet" a page of unrelated text) is dropped.
 
 Two fixes from the merge are worth knowing about: the old inspector's example metadata scripts imported a `normalize_pdf_metadata` name the package never exported (it is now an alias for `normalize_metadata`), and the old tool's module created a `pdf_compressor.log` file in the working directory on import (logging is now the caller's job, and importing the compressor has no side effects). The old projects' single-commit histories, which carried personal email addresses, were not carried over; this repo starts with a clean history under the `enonymous1` identity.
 

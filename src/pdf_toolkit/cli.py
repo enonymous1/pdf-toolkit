@@ -18,6 +18,10 @@ Subcommands:
 - ``check-format`` — check a .docx file (or a directory of them) against
   formatting rules, optionally annotating it with Word comments
   (needs ``pdf-toolkit[office]``; annotation needs Windows with Word).
+- ``check-citations`` — flag DOCX manuscript text similar to a PDF
+  source, for manual citation review (needs ``pdf-toolkit[citations]``
+  for the DOCX reader). Exit 0 when nothing matches, 1 when matches
+  are found, 2 for a usage or file error.
 
 ``main()`` accepts an argument list and returns an exit code, so tests
 can call it directly; the console-script entry point exits with it.
@@ -299,6 +303,61 @@ def run_check_format(args: argparse.Namespace) -> int:
     except ImportError as exc:
         print(f"Error: {exc}")
         return 1
+
+
+def run_check_citations(args: argparse.Namespace) -> int:
+    """Flag DOCX text similar to a PDF source, for citation review."""
+    import json
+
+    from .citations import CitationError, compare_documents
+
+    try:
+        results = compare_documents(
+            args.docx,
+            args.pdf,
+            threshold=args.threshold,
+            min_chunk_length=args.min_chunk_length,
+            context_sentences=args.context_sentences,
+            max_window=args.max_window_size,
+            min_pdf_snippet_length=args.min_pdf_snippet_length,
+            min_overlap=args.min_overlap,
+            skip_cited=args.skip_cited,
+        )
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        return 2
+    except (CitationError, ValueError) as exc:
+        print(f"Error: {exc}")
+        return 2
+    except ImportError as exc:
+        print(f"Error: {exc}")
+        return 1
+
+    if args.json_out:
+        payload = [match.to_dict() for match in results]
+        with Path(args.json_out).open("w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        print(f"Wrote JSON report to {args.json_out}")
+    else:
+        if not results:
+            print("No matches found.")
+        for match in results:
+            print("---")
+            print(f"Doc chunk id: {match.doc_chunk_id} ({match.doc_source})")
+            print(f"Similarity: {match.score}")
+            print(f"PDF page: {match.page_number}")
+            if match.has_citation_marker:
+                print("Note: doc chunk carries a citation marker; review it anyway.")
+            print("PDF snippet:")
+            print(match.pdf_snippet)
+            if match.pdf_context:
+                print("PDF context:")
+                print(match.pdf_context)
+            print("Doc text:")
+            print(match.doc_text)
+
+    print(f"Found {len(results)} matches (threshold {args.threshold})")
+    return 1 if results else 0
 
 
 def run_gui() -> int:
@@ -661,7 +720,7 @@ def _add_template_args(parser: argparse.ArgumentParser) -> None:
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pdf-toolkit",
-        description="Inspect, compress, split, dissect, and convert PDFs, and check .docx formatting.",
+        description="Inspect, compress, split, dissect, and convert PDFs, check .docx formatting, and flag uncited-looking DOCX text against a PDF source.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -859,6 +918,52 @@ def create_parser() -> argparse.ArgumentParser:
     )
     check_parser.add_argument("--spacing", type=float, default=1.0, help="Line spacing")
     check_parser.add_argument("--margin", type=float, default=1.0, help="Margin in inches")
+
+    citations_parser = sub.add_parser(
+        "check-citations",
+        help="Flag DOCX text similar to a PDF source (needs pdf-toolkit[citations])",
+    )
+    citations_parser.add_argument("docx", help="Path to the DOCX manuscript")
+    citations_parser.add_argument("pdf", help="Path to the PDF source material")
+    citations_parser.add_argument(
+        "--threshold", type=int, default=85, help="Similarity threshold (0-100)"
+    )
+    citations_parser.add_argument("--json-out", help="Write JSON report to this file")
+    citations_parser.add_argument(
+        "--min-chunk-length",
+        type=int,
+        default=0,
+        help="Minimum characters in a doc chunk to consider",
+    )
+    citations_parser.add_argument(
+        "--context-sentences",
+        type=int,
+        default=1,
+        help="Number of surrounding PDF sentences to include in context",
+    )
+    citations_parser.add_argument(
+        "--max-window-size",
+        type=int,
+        default=3,
+        help="Maximum number of PDF sentences to combine for matching window",
+    )
+    citations_parser.add_argument(
+        "--min-pdf-snippet-length",
+        type=int,
+        default=10,
+        help="Minimum alphanumeric length for a PDF snippet to count as a match",
+    )
+    citations_parser.add_argument(
+        "--min-overlap",
+        type=float,
+        default=0.5,
+        help="Fraction of a chunk's tokens a window must share before scoring (0-1)",
+    )
+    citations_parser.add_argument(
+        "--skip-cited",
+        action="store_true",
+        help="Skip doc chunks carrying an explicit citation marker",
+    )
     return parser
 
 
@@ -878,6 +983,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_convert(args)
     if args.command == "check-format":
         return run_check_format(args)
+    if args.command == "check-citations":
+        return run_check_citations(args)
     return 2
 
 

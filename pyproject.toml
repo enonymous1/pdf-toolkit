@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-toolkit"
-version = "0.4.0"
-description = "Inspect, compress, split, dissect, and convert PDFs: multi-library metadata and TOC analysis, structural, pypdf, and Ghostscript compression, chapter splitting by bookmarks/CSV/headings, form-page detection and reconstruction to fillable HTML/PDF/DOCX, DOCX/XLSX to PDF conversion, and .docx formatting checks, with a CLI and an optional PyQt6 GUI."
+version = "0.5.0"
+description = "Inspect, compress, split, dissect, and convert PDFs: multi-library metadata and TOC analysis, structural, pypdf, and Ghostscript compression, chapter splitting by bookmarks/CSV/headings, form-page detection and reconstruction to fillable HTML/PDF/DOCX, DOCX/XLSX to PDF conversion, .docx formatting checks, and flagging DOCX text similar to a PDF source for citation review, with a CLI and an optional PyQt6 GUI."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "enonymous1" }]
-keywords = ["pdf", "pypdf", "pymupdf", "pdfminer", "pdfplumber", "compression", "metadata", "splitting", "form-extraction", "fillable-pdf", "ocr"]
+keywords = ["pdf", "pypdf", "pymupdf", "pdfminer", "pdfplumber", "compression", "metadata", "splitting", "form-extraction", "fillable-pdf", "ocr", "citation-checking"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -26,6 +26,7 @@ dependencies = [
     "pypdf>=4.0.0",
     "pdfminer.six>=20231228",
     "pdfplumber>=0.11.0",
+    "rapidfuzz>=3.0.0",
     "rich>=13.0.0",
 ]
 
@@ -65,6 +66,9 @@ dissect = [
     "python-docx>=1.0.0",
     "docxtpl>=0.17.0",
     "pytesseract>=0.3.0",
+]
+citations = [
+    "python-docx>=1.0.0",
 ]
 
 [project.scripts]
