@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdf-toolkit"
-version = "0.3.0"
-description = "Inspect, compress, split, and convert PDFs: multi-library metadata and TOC analysis, structural, pypdf, and Ghostscript compression, chapter splitting by bookmarks/CSV/headings, DOCX/XLSX to PDF conversion, and .docx formatting checks, with a CLI and an optional PyQt6 GUI."
+version = "0.4.0"
+description = "Inspect, compress, split, dissect, and convert PDFs: multi-library metadata and TOC analysis, structural, pypdf, and Ghostscript compression, chapter splitting by bookmarks/CSV/headings, form-page detection and reconstruction to fillable HTML/PDF/DOCX, DOCX/XLSX to PDF conversion, and .docx formatting checks, with a CLI and an optional PyQt6 GUI."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "enonymous1" }]
-keywords = ["pdf", "pypdf", "pymupdf", "pdfminer", "pdfplumber", "compression", "metadata", "splitting"]
+keywords = ["pdf", "pypdf", "pymupdf", "pdfminer", "pdfplumber", "compression", "metadata", "splitting", "form-extraction", "fillable-pdf", "ocr"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -56,6 +56,16 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6.0",
 ]
+dissect = [
+    "opencv-python-headless>=4.8.0",
+    "numpy>=1.26.0",
+    "Pillow>=10.0.0",
+    "reportlab>=3.6.0",
+    "Flask>=2.0",
+    "python-docx>=1.0.0",
+    "docxtpl>=0.17.0",
+    "pytesseract>=0.3.0",
+]
 
 [project.scripts]
 pdf-toolkit = "pdf_toolkit.cli:main"
@@ -67,6 +77,9 @@ Repository = "https://github.com/enonymous1/pdf-toolkit"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["pdf_toolkit*"]
+
+[tool.setuptools.package-data]
+"pdf_toolkit.dissect" = ["templates/*.html"]
 
 [tool.ruff]
 line-length = 100

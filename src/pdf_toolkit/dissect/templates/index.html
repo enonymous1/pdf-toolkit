@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document Dissection - Preview Index</title>
+  <style>
+    body{font-family:system-ui, Arial, sans-serif;padding:20px}
+    .group{border:1px solid #eee;padding:12px;margin-bottom:12px}
+    .pages{display:flex;gap:12px;flex-wrap:wrap}
+    .page-card{border:1px solid #ddd;padding:8px;width:180px}
+    .thumb{width:160px;height:auto;display:block;margin-bottom:6px}
+    .actions{display:flex;gap:6px}
+    .control{margin-left:auto}
+  </style>
+</head>
+<body>
+  <h1>Preview Index</h1>
+  {% if not groups %}
+    <p>No generated pages were found. Run the CLI to generate interactive HTML pages under an <code>html/</code> or <code>interactive/</code> folder.</p>
+  {% endif %}
+
+  {% for group, pages in groups.items() %}
+    <div class="group">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div><strong>{{ group }}</strong></div>
+        <div style="margin-left:auto">
+          <button onclick="exportDocx('{{ group }}')">Export to DOCX</button>
+          <button onclick="fillDocumentPrompt('{{ group }}')">Fill PDFs</button>
+        </div>
+      </div>
+      <div class="pages">
+        {% for p in pages %}
+          <div class="page-card">
+            {% if p.thumb %}
+              <img class="thumb" src="/thumbnail?path={{ p.thumb|urlencode }}&size=160" alt="thumb" />
+            {% else %}
+              <div style="width:160px;height:120px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#999">No image</div>
+            {% endif %}
+            <div>Page: {{ p.page or 'n/a' }}</div>
+            <div>Fields: {{ p.field_count or 'n/a' }}</div>
+            <div class="actions">
+              <a href="/files/{{ p.html_rel }}" target="_blank">Open</a>
+              <button onclick="exportDocxPage('{{ p.group_dir }}','{{ p.page }}')">Export page DOCX</button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+<script>
+function exportDocx(group){
+  const out = prompt('Output path for DOCX (relative to cwd)', `out/docx/${group.replaceAll('/','_')}.docx`);
+  if(!out) return;
+  fetch('/export-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({group_dir: group, out_path: out})}).then(r=>r.json()).then(j=>{alert(JSON.stringify(j)); if(j.path){window.open('/files/'+j.path,'_blank');}}).catch(e=>alert(e));
+}
+
+function exportDocxPage(group, page){
+  const out = prompt('Output path for PAGE DOCX (relative to cwd)', `out/docx/${group.replaceAll('/','_')}_page_${page}.docx`);
+  if(!out) return;
+  // For single page, create a temp directory listing images only (server will export whole doc); easiest: still export full group and user can pick page from doc
+  fetch('/export-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({group_dir: group, out_path: out})}).then(r=>r.json()).then(j=>{alert(JSON.stringify(j)); if(j.path){window.open('/files/'+j.path,'_blank');}}).catch(e=>alert(e));
+}
+
+function fillDocumentPrompt(group){
+  const dataStr = prompt('Paste JSON data for fill (e.g., {"field_1":"value"})');
+  if(!dataStr) return;
+  let data;
+  try{data=JSON.parse(dataStr);}catch(e){alert('invalid json');return}
+  fetch('/fill-document',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({group_dir: group, data: data})}).then(r=>r.json()).then(j=>{alert(JSON.stringify(j));}).catch(e=>alert(e));
+}
+</script>
+</body>
+</html>

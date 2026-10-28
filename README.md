@@ -1,6 +1,6 @@
 # pdf-toolkit
 
-Inspect a PDF, compare how four Python PDF libraries see it, shrink it, split it into chapters, or make one from an office document — from one package, one CLI.
+Inspect a PDF, compare how four Python PDF libraries see it, shrink it, split it into chapters, dissect its forms, or make one from an office document — from one package, one CLI.
 
 [![CI](https://github.com/enonymous1/pdf-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/enonymous1/pdf-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -11,6 +11,7 @@ Inspect a PDF, compare how four Python PDF libraries see it, shrink it, split it
 - **Compare libraries** — per-library examples in `examples/` that extract text, pages, and metadata the same way, so you can see where the libraries disagree.
 - **Find a table of contents** — outline extraction plus a text heuristic for manuals whose TOC is just printed text, with a hint page for where it starts.
 - **Split** — one PDF per chapter, by bookmarks, a `title,page` CSV, located headings, or the printed TOC text. Dry-run by default; existing outputs are never silently overwritten.
+- **Dissect** — find templated form pages by keyword or image similarity, detect their field boxes, label them with OCR, and rebuild each page as an interactive HTML overlay, a fillable PDF, and a DOCX, with a local preview server for editing fieldmaps. Needs `pdf-toolkit[dissect]`.
 - **Export** — convert a PDF to Markdown, HTML, DOCX, or a structured JSON report.
 - **Compress** — three methods in one engine:
   - `structural` (default): PyMuPDF garbage collection + stream deflation + clean. Text stays selectable, vectors stay sharp, nothing is rasterized.
@@ -55,6 +56,18 @@ pdf-toolkit split document.pdf --toc-text --hint 2 --offset 4 --yes
 # Just dump the resolved chapter list
 pdf-toolkit split document.pdf --export-csv chapters.csv
 
+# Dissect form pages (needs pdf-toolkit[dissect])
+pdf-toolkit dissect detect document.pdf --keyword "Form Title" --keyword Signature
+# Rebuild matched pages: images/, html/ (overlay + fieldmap JSON),
+# fillable_pdfs/, extracted_pdfs/ under ./recon/
+pdf-toolkit dissect reconstruct document.pdf --keyword "Form Title" --out-dir ./recon/
+# Fill from a fieldmap and data JSON (per-page keys, or a "global" mapping)
+pdf-toolkit dissect fill document.pdf --fieldmap ./recon/ --data data.json --out-dir ./filled/
+# Export pages to DOCX, optionally filled
+pdf-toolkit dissect export-docx --fieldmap ./recon/ --out-dir ./docx/ --fill --data data.json
+# Preview and edit fieldmaps locally (loopback only, confined to --root)
+pdf-toolkit dissect serve --root ./recon/
+
 # Convert to PDF (needs pdf-toolkit[office]; see limitations below)
 pdf-toolkit convert document.docx
 pdf-toolkit convert spreadsheet.xlsx -o report.pdf
@@ -88,6 +101,11 @@ from pdf_toolkit.splitter import extract_outline_entries, split_pdf
 
 entries, _warnings = extract_outline_entries("document.pdf")
 split_pdf("document.pdf", entries, "./chapters/")
+
+from pdf_toolkit.dissect import find_template_pages, reconstruct_pdf_pages
+
+result = find_template_pages("document.pdf", ["Form Title", "Signature"])
+reconstruct_pdf_pages("document.pdf", result.matched_pages, "./recon/")
 ```
 
 ## Install options
@@ -100,6 +118,7 @@ split_pdf("document.pdf", entries, "./chapters/")
 | `pdf-toolkit[ocr]` | pytesseract, pdf2image, Pillow, numpy for OCR paths |
 | `pdf-toolkit[export]` | pymupdf4llm + pdf2docx for `--export md` / `--export docx` |
 | `pdf-toolkit[office]` | python-docx + docx2pdf + openpyxl for `convert` and `check-format` (pywin32 on Windows) |
+| `pdf-toolkit[dissect]` | OpenCV + NumPy + Pillow + ReportLab + Flask + python-docx + docxtpl + pytesseract for `dissect` (Tesseract binary still needed separately for OCR labels) |
 | `pdf-toolkit[dev]` | pytest + ruff |
 
 Optional features fail with a plain "install this extra" message instead of an import error at startup: the CLI imports Camelot, tabula, pytesseract, the export converters, and the office converters lazily, only when that feature is used.
@@ -125,8 +144,9 @@ python -m pytest -q
 ```text
 pdf-toolkit/
 ├── src/pdf_toolkit/
-│   ├── cli.py                 # pdf-toolkit inspect / compress / split / gui / convert / check-format
+│   ├── cli.py                 # pdf-toolkit inspect / compress / split / dissect / gui / convert / check-format
 │   ├── splitter/              # chapter splitting by bookmarks, CSV, headings, or TOC text
+│   ├── dissect/               # form-page detection, field detection, reconstruction, preview server
 │   ├── to_pdf/                # docx/xlsx to PDF, .docx formatting checker
 │   ├── inspector/             # adapters, TOC parsers, analysis, extraction
 │   │   ├── adapters/          # pypdf, pdfminer, pymupdf, pdfplumber
@@ -149,16 +169,18 @@ pdf-toolkit/
 - Office conversion is not covered by automated tests either: `.xlsx` conversion needs Windows with Excel, and `.docx` conversion needs Word. CI covers the dispatch, the Excel page-setup rules, and the formatting checker (which runs anywhere python-docx runs); the actual conversions are verified by hand on a Windows machine. Word-comment annotation likewise needs Windows with Word — the report itself works everywhere.
 - The formatting checker's defaults (Calibri, 12pt body / 10pt captions and footnotes, 1.0 spacing, 1-inch margins) come from the original project's style guide; they are defaults, not a standard, so pass your own values if your documents use different rules.
 - Table extraction with Camelot works best on bordered tables; unbordered tables may need the stream fallback or pdfplumber's own table finder in the examples.
+- Dissect field detection is a contour heuristic: it finds rectangular boxes, so nested boxes and unboxed fields are missed or merged, and OCR labels are one word per field. The preview server has no authentication and is confined to its `--root` directory — keep it on loopback. The original's WeasyPrint HTML-to-PDF path is not ported (it needs system Cairo/Pango libraries); filled PDFs come from `dissect fill` instead.
 
 ## History
 
-`pdf-toolkit` merges five earlier projects into one package, with a single CLI and a single dependency story:
+`pdf-toolkit` merges six earlier projects into one package, with a single CLI and a single dependency story:
 
 - `ss-py-pdf-inspector` — the inspector, its adapters, TOC parsers, dashboard, and examples. Its old tests that required a private, unshipped manual PDF were replaced with tests against a synthetic TOC fixture built in the test, and its generated example outputs were dropped.
 - `ss-pdf-small` — the CLI batch compressor. Its PyMuPDF structural pass is now the default `structural` method, and its inspect/estimate step is the compressor's preflight.
 - `ss-pdf-tool` — the PyQt6 GUI compressor. Its pypdf and Ghostscript methods are now compressor methods, and the GUI imports the package instead of reaching for a sibling file via `sys.path`.
 - `ss-toPDF` (merged in 0.2.0) — DOCX/XLSX to PDF conversion plus the .docx formatting checker. Its converters are now `pdf-toolkit convert`, and its checker is now `pdf-toolkit check-format` with the rules as parameters instead of module constants. Its example documents were real work files and are not shipped; the checker tests build synthetic documents in-test instead. The merge also fixed the original batch script, which imported three checker functions that did not exist, and removed hardcoded local paths from the checker.
 - `ss-HESI` (merged in 0.3.0) — scripts for splitting a PDF by bookmarks/TOC text, locating headings, and cleaning split filenames. Its logic is now `pdf-toolkit split` and the `pdf_toolkit.splitter` library, generalized off the one book it was built for: no hardcoded paths, one shared CSV parser and filename sanitizer, heading location in a single pass over the PDF, and the outline page resolution the inspector's TOC extractor was missing (it previously returned titles with no pages). The original's bugs are fixed, not carried over: a duplicated output write, a documented-but-unimplemented `--preview-only` flag, a TOC scan that treated every numbered line on the first ten pages as an entry, and printed page numbers silently used as physical ones. Splitting is verified against a synthetic fixture built in-test; no book content is shipped, and the source PDF is never part of this repo.
+- `ss-documentDissection` (merged in 0.4.0) — a pipeline for detecting templated form pages and rebuilding them as fillable HTML, PDF, and DOCX, with a Flask preview server. Its logic is now `pdf-toolkit dissect` and the `pdf_toolkit.dissect` library. The original's bugs are fixed, not carried over: fieldmaps written with `str()` and read back with `eval()` (now JSON throughout), a `--keywords` option that swallowed subcommand names (now repeatable `--keyword`), `--to-html-dir` handling nested inside the wrong subcommand and crashing without `--reconstruct-dir`, a preview server that served and wrote files relative to the working directory with no confinement (now confined to `--root`, with absolute and escaping paths rejected), a `/fill-document` endpoint that passed a filename where bytes were expected (now fills and writes), and PDF filling that only ever filled page 1. The WeasyPrint HTML-to-PDF path is not ported; no sample documents are shipped, and the original's history, which carried a personal email address, was not carried over.
 
 Two fixes from the merge are worth knowing about: the old inspector's example metadata scripts imported a `normalize_pdf_metadata` name the package never exported (it is now an alias for `normalize_metadata`), and the old tool's module created a `pdf_compressor.log` file in the working directory on import (logging is now the caller's job, and importing the compressor has no side effects). The old projects' single-commit histories, which carried personal email addresses, were not carried over; this repo starts with a clean history under the `enonymous1` identity.
 
