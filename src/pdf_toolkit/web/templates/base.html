@@ -4,18 +4,72 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}pdf-toolkit web{% endblock %}</title>
+  <script>
+    // Apply a remembered theme before first paint; without one, the
+    // CSS media query below follows the system theme. Stored only
+    // in localStorage, never sent anywhere.
+    try {
+      var t = localStorage.getItem('pdf-toolkit-theme');
+      if (t === 'dark' || t === 'light') document.documentElement.className = t;
+    } catch (e) {}
+  </script>
   <style>
-    body{font-family:system-ui, Arial, sans-serif; padding:20px; max-width:760px; margin:0 auto}
+    :root{
+      --bg:#ffffff; --fg:#111111; --muted:#555555;
+      --border:#dddddd; --banner-bg:#fff8e1; --banner-border:#f0d98c;
+      --error-bg:#fdecea; --error-border:#f5c6c6; --drop-border:#999999;
+      --drop-over:#339933; --drop-over-bg:#f2faf2; --link:#0b5394;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg:#1a1a1a; --fg:#e8e8e8; --muted:#aaaaaa;
+        --border:#444444; --banner-bg:#3a3200; --banner-border:#8a7a20;
+        --error-bg:#3d1a1a; --error-border:#7a3333; --drop-border:#777777;
+        --drop-over:#66bb66; --drop-over-bg:#1e2e1e; --link:#8ab4f8;
+      }
+    }
+    html.dark{
+      --bg:#1a1a1a; --fg:#e8e8e8; --muted:#aaaaaa;
+      --border:#444444; --banner-bg:#3a3200; --banner-border:#8a7a20;
+      --error-bg:#3d1a1a; --error-border:#7a3333; --drop-border:#777777;
+      --drop-over:#66bb66; --drop-over-bg:#1e2e1e; --link:#8ab4f8;
+    }
+    html.light{
+      --bg:#ffffff; --fg:#111111; --muted:#555555;
+      --border:#dddddd; --banner-bg:#fff8e1; --banner-border:#f0d98c;
+      --error-bg:#fdecea; --error-border:#f5c6c6; --drop-border:#999999;
+      --drop-over:#339933; --drop-over-bg:#f2faf2; --link:#0b5394;
+    }
+    body{font-family:system-ui, Arial, sans-serif; padding:20px; max-width:760px; margin:0 auto; background:var(--bg); color:var(--fg)}
+    a{color:var(--link)}
     table{border-collapse:collapse}
-    th,td{border:1px solid #ddd; padding:6px 10px; text-align:left}
-    .banner{background:#fff8e1; border:1px solid #f0d98c; padding:10px; margin-bottom:16px}
-    .error{background:#fdecea; border:1px solid #f5c6c6; padding:10px; margin-bottom:16px}
-    .drop{border:2px dashed #999; border-radius:6px; padding:24px; text-align:center; margin-bottom:12px}
-    .drop.over{border-color:#339933; background:#f2faf2}
+    th,td{border:1px solid var(--border); padding:6px 10px; text-align:left}
+    .banner{background:var(--banner-bg); border:1px solid var(--banner-border); padding:10px; margin-bottom:16px}
+    .error{background:var(--error-bg); border:1px solid var(--error-border); padding:10px; margin-bottom:16px}
+    .drop{border:2px dashed var(--drop-border); border-radius:6px; padding:24px; text-align:center; margin-bottom:12px}
+    .drop.over{border-color:var(--drop-over); background:var(--drop-over-bg)}
+    .topbar{display:flex; align-items:center; gap:12px}
+    .topbar button{margin-left:auto}
+    .pdf-embed{width:100%; height:560px; border:1px solid var(--border)}
   </style>
 </head>
 <body>
-  <p><a href="{{ url_for('index') }}">pdf-toolkit web</a></p>
+  <div class="topbar">
+    <p><a href="{{ url_for('index') }}">pdf-toolkit web</a></p>
+    <button type="button" id="theme-toggle">Toggle dark mode</button>
+  </div>
+  <script>
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      var html = document.documentElement;
+      // Currently dark by explicit class, or by system theme when no
+      // explicit class is set; the toggle flips it and remembers it.
+      var currentlyDark = html.className === 'dark' ||
+        (html.className !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = currentlyDark ? 'light' : 'dark';
+      html.className = next;
+      try { localStorage.setItem('pdf-toolkit-theme', next); } catch (e) {}
+    });
+  </script>
   {% if demo %}
   <div class="banner"><strong>Demo data.</strong> This page shows seeded fixture
   data, not a result for a file you uploaded. Live uploads always run the real

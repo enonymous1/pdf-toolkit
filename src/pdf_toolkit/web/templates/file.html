@@ -20,6 +20,13 @@
   {% endfor %}
 </table>
 {% endif %}
+{% if demo %}
+<h2>Source PDF</h2>
+<p>The sample PDF this demo data was measured from — inspection and
+compression results below describe this file:</p>
+<embed class="pdf-embed" src="{{ demo_pdf_url }}" type="application/pdf">
+<p><a href="{{ demo_pdf_url }}">Open the sample PDF</a> in your browser's PDF viewer.</p>
+{% endif %}
 <h2>Compress</h2>
 {% if frozen %}
 <p><em>Frozen demo.</em> Forms do not submit on the static Pages demo. See the

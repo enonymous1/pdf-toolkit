@@ -115,7 +115,10 @@ def test_freeze_demo_writes_static_pages(tmp_path):
         "index.html",
         "demo/sample/index.html",
         "demo/sample/compressed/index.html",
+        "demo/sample/sample.pdf",
     ]
+    frozen_pdf = tmp_path / "demo/sample/sample.pdf"
+    assert frozen_pdf.read_bytes()[:5] == b"%PDF-"
     index = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "Frozen demo" in index
     assert "Upload and inspect" not in index
@@ -135,6 +138,34 @@ def test_freeze_demo_writes_static_pages(tmp_path):
     assert 'href="../../"' in sample
     assert 'href="../"' in compressed
     assert 'href="../../../"' in compressed
+
+
+def test_pages_are_theme_aware(live_client, demo_client):
+    # System-theme media query plus a toggle that remembers the
+    # choice in localStorage, on live and demo pages alike.
+    for client in (live_client, demo_client):
+        page = client.get("/" if client is live_client else "/demo/sample")
+        assert b"prefers-color-scheme: dark" in page.data
+        assert b"pdf-toolkit-theme" in page.data
+        assert b"Toggle dark mode" in page.data
+
+
+def test_demo_sample_pdf_route(demo_client):
+    response = demo_client.get("/demo/sample.pdf")
+    assert response.status_code == 200
+    assert response.data[:5] == b"%PDF-"
+    assert "application/pdf" in response.content_type
+
+
+def test_demo_sample_page_embeds_source_pdf(demo_client):
+    page = demo_client.get("/demo/sample")
+    assert b'<embed class="pdf-embed" src="/demo/sample.pdf"' in page.data
+
+
+def test_frozen_sample_page_embeds_relative_pdf(tmp_path):
+    freeze_demo(tmp_path)
+    sample = (tmp_path / "demo/sample/index.html").read_text(encoding="utf-8")
+    assert '<embed class="pdf-embed" src="sample.pdf"' in sample
 
 
 def test_run_server_refuses_non_loopback():

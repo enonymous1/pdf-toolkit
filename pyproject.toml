@@ -89,6 +89,7 @@ version = { attr = "pdf_toolkit.__version__" }
 
 [tool.setuptools.package-data]
 "pdf_toolkit.dissect" = ["templates/*.html"]
+"pdf_toolkit.web" = ["templates/*.html", "*.pdf"]
 
 [tool.ruff]
 line-length = 100

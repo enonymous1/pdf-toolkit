@@ -235,10 +235,26 @@ def create_app(upload_dir: str | Path | None = None, demo: bool = False):
             resolved, as_attachment=True, download_name=f"{Path(entry['name']).stem}_compressed.pdf"
         )
 
+    @app.route("/demo/sample.pdf")
+    def demo_sample_pdf():
+        # The real sample PDF, bundled with the web package so demo
+        # mode needs no fixture file. Served inline for the embed on
+        # the demo sample page, not as a download.
+        import importlib.resources as resources
+
+        data = (resources.files("pdf_toolkit.web") / "demo_sample.pdf").read_bytes()
+        return send_file(
+            io.BytesIO(data), mimetype="application/pdf", download_name="sample_example.pdf"
+        )
+
     @app.route("/demo/sample")
     def demo_sample():
         from ..compressor import METHODS
 
+        # Frozen sample page lives at demo/sample/index.html, and the
+        # frozen PDF copy sits next to it, so its embed is relative;
+        # the live demo server uses the absolute route.
+        pdf_url = "sample.pdf" if _frozen() else "/demo/sample.pdf"
         return render_template(
             "file.html",
             demo=True,
@@ -249,6 +265,7 @@ def create_app(upload_dir: str | Path | None = None, demo: bool = False):
             methods=METHODS,
             compressed=False,
             demo_compress_url="/demo/sample/compress",
+            demo_pdf_url=pdf_url,
         )
 
     @app.route("/demo/sample/compress", methods=["POST"])
@@ -360,6 +377,14 @@ def freeze_demo(out_dir: str | Path) -> list[str]:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(html, encoding="utf-8")
         written.append(rel)
+    # The sample PDF the demo page embeds, next to the sample page so
+    # its relative embed ("sample.pdf") resolves on any subpath.
+    import importlib.resources as resources
+
+    pdf_target = out / "demo/sample/sample.pdf"
+    pdf_target.parent.mkdir(parents=True, exist_ok=True)
+    pdf_target.write_bytes((resources.files("pdf_toolkit.web") / "demo_sample.pdf").read_bytes())
+    written.append("demo/sample/sample.pdf")
     return written
 
 
