@@ -67,6 +67,12 @@ jobs:
       # optional-import typing errors in other extras (like the 0.6.0
       # ocr_utils failure, which only appeared once OpenCV was
       # installed) would slip through. This job has every extra, so
-      # run mypy here too.
+      # run mypy here too — except the gui package: PyQt6's QtGui.pyi
+      # stubs contain invalid syntax (`*args, /`), and mypy aborts
+      # parsing them as soon as the gui extra is installed, even with
+      # follow_imports = "skip". --exclude 'gui' also drops
+      # cli/gui.py, the launcher that imports main_gui, which is what
+      # breaks the chain into those stubs; the main job still checks
+      # both files with PyQt6 absent.
       - name: Typecheck with all extras installed
-        run: mypy src/pdf_toolkit
+        run: mypy src/pdf_toolkit --exclude 'gui'
