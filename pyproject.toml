@@ -108,11 +108,13 @@ show_error_codes = true
 # Note: PyQt6's own QtGui.pyi stubs contain invalid syntax (e.g.
 # `def drawConvexPolygon(self, point, *args, /)` — "/" must come
 # before "*"), so mypy aborts as soon as it follows an import into
-# them. That only happens when the gui extra is installed, which is
-# why the main job never saw it and the extras-smoke job did.
-# follow_imports = "skip" does NOT help: mypy still parses the stub
-# to resolve the import. The extras-smoke job therefore runs mypy
-# with --exclude 'gui' (see ci.yml); the main job still checks the
-# gui code with PyQt6 absent, where Qt names are Any. Do not "fix"
+# them. That only happens when PyQt6 is installed alongside Pillow:
+# Pillow's Image module imports ImageQt, which imports PyQt6, so the
+# chain goes through Pillow, not through our gui package — which is
+# why --exclude 'gui' and follow_imports = "skip" both fail to help
+# (mypy follows imports regardless of exclude, and still parses the
+# stub to resolve the import). The all-extras typecheck job in CI
+# therefore omits the gui extra (see ci.yml); the gui files are still
+# checked with PyQt6 absent, where Qt names are Any. Do not "fix"
 # this by editing site-packages, and do not pin PyQt6 just for its
 # stubs.

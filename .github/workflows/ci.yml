@@ -63,16 +63,37 @@ jobs:
         run: |
           python -c "import camelot, tabula, pytesseract, pdf2image, pymupdf4llm, pdf2docx, docx, openpyxl, cv2, flask, docxtpl, reportlab, numpy, PIL"
           python -c "from pdf_toolkit.cli import main; from pdf_toolkit.gui.main_gui import PdfDropWindow"
-      # The main job's mypy only sees the dissect/citations extras, so
-      # optional-import typing errors in other extras (like the 0.6.0
-      # ocr_utils failure, which only appeared once OpenCV was
-      # installed) would slip through. This job has every extra, so
-      # run mypy here too — except the gui package: PyQt6's QtGui.pyi
-      # stubs contain invalid syntax (`*args, /`), and mypy aborts
-      # parsing them as soon as the gui extra is installed, even with
-      # follow_imports = "skip". --exclude 'gui' also drops
-      # cli/gui.py, the launcher that imports main_gui, which is what
-      # breaks the chain into those stubs; the main job still checks
-      # both files with PyQt6 absent.
-      - name: Typecheck with all extras installed
-        run: mypy src/pdf_toolkit --exclude 'gui'
+
+  # The main job's mypy only sees the dissect/citations extras, so
+  # optional-import typing errors in other extras (like the 0.6.0
+  # ocr_utils failure, which only appeared once OpenCV was installed,
+  # and the 0.6.1 ocr_engine failure, which only appeared once
+  # pdf2image was installed) would slip through. This job installs
+  # every extra EXCEPT gui and typechecks the full package.
+  # Why not gui too: PyQt6's QtGui.pyi stubs contain invalid syntax
+  # (`*args, /`), and mypy aborts parsing them whenever PyQt6 is
+  # installed alongside Pillow — because Pillow's Image module imports
+  # ImageQt, which imports PyQt6, so the chain goes through Pillow,
+  # not through our gui package. --exclude 'gui' cannot help: mypy
+  # follows imports regardless of exclude, and follow_imports =
+  # "skip" does not help either (mypy still parses the stub to
+  # resolve the import). Omitting the gui extra is the only thing
+  # that works: with PyQt6 absent, its stubs are never parsed and
+  # the gui files are still checked, with Qt names as Any — the same
+  # as in the main job. The gui import itself is smoke-tested in
+  # extras-smoke above. Do not re-add a mypy step to extras-smoke
+  # or re-add gui here without first reproducing the QtGui.pyi
+  # failure in an editable install with Pillow present.
+  mypy-all-extras:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install all extras except gui
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,tables,ocr,export,office,dissect,citations]"
+      - name: Typecheck with all non-gui extras installed
+        run: mypy src/pdf_toolkit

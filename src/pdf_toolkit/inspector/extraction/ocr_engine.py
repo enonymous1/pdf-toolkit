@@ -9,12 +9,13 @@ def extract_text_via_ocr(pdf_path: str, pages: list[int] | None = None, dpi: int
         import pytesseract
         from pdf2image import convert_from_path
 
-        images = convert_from_path(
-            pdf_path,
-            dpi=dpi,
-            first_page=pages[0] if pages else None,
-            last_page=pages[-1] if pages else None,
-        )
+        # pdf2image's typed signature wants int for first/last page,
+        # not None, so only pass them when a page range was given
+        # (its runtime defaults are None, i.e. the whole document).
+        if pages:
+            images = convert_from_path(pdf_path, dpi=dpi, first_page=pages[0], last_page=pages[-1])
+        else:
+            images = convert_from_path(pdf_path, dpi=dpi)
         full_text = []
         for img in images:
             text = pytesseract.image_to_string(img)
