@@ -44,6 +44,7 @@ from .gui import run_gui
 from .office import run_check_format, run_convert
 from .parser import create_parser
 from .split import run_split
+from .web import run_web
 
 __all__ = [
     "create_parser",
@@ -55,6 +56,7 @@ __all__ = [
     "run_dissect",
     "run_gui",
     "run_split",
+    "run_web",
 ]
 
 
@@ -76,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_dissect(args)
     if args.command == "gui":
         return run_gui()
+    if args.command == "web":
+        return run_web(args)
     if args.command == "convert":
         return run_convert(args)
     if args.command == "check-format":

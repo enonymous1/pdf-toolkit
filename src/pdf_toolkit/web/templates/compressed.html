@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Compression result — pdf-toolkit web{% endblock %}
+{% block body %}
+<h1>Compression result: {{ name }}</h1>
+{% if result.success %}
+<table>
+  <tr><th>Method</th><td>{{ result.method }}</td></tr>
+  <tr><th>Original size</th><td>{{ result.initial_size }} bytes</td></tr>
+  <tr><th>Compressed size</th><td>{{ result.final_size }} bytes</td></tr>
+  <tr><th>Saved</th><td>{{ result.saved_bytes }} bytes ({{ "%.2f"|format(result.reduction_pct) }}%)</td></tr>
+</table>
+{% if frozen %}
+<p>Frozen demo — downloads are not available on the static Pages demo.</p>
+{% elif demo %}
+<p>Demo data — no file was compressed. On a live server this page offers the
+compressed file for download.</p>
+{% else %}
+<p><a href="{{ url_for('download', file_id=file_id) }}">Download the compressed PDF</a></p>
+{% endif %}
+{% else %}
+<div class="error">Compression failed: {{ result.error }}</div>
+{% endif %}
+{% endblock %}

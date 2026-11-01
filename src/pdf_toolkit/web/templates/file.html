@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} — pdf-toolkit web{% endblock %}
+{% block body %}
+<h1>{{ name }}</h1>
+<table>
+  <tr><th>Pages</th><td>{{ info.page_count }}</td></tr>
+  <tr><th>File size</th><td>{{ info.file_size }} bytes</td></tr>
+  <tr><th>Images</th><td>{{ info.image_count }}</td></tr>
+  <tr><th>Objects</th><td>{{ info.object_count }}</td></tr>
+  <tr><th>Encrypted</th><td>{{ info.is_encrypted }}</td></tr>
+  <tr><th>Compression estimate</th><td>{{ info.estimate }}</td></tr>
+</table>
+{% if info.metadata %}
+<h2>Metadata</h2>
+<table>
+  {% for key, value in info.metadata.items() %}
+  {% if value is not none and value != "" %}
+  <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+  {% endif %}
+  {% endfor %}
+</table>
+{% endif %}
+<h2>Compress</h2>
+{% if frozen %}
+<p><em>Frozen demo.</em> Forms do not submit on the static Pages demo. See the
+<a href="/demo/sample/compressed">seeded compression result</a> instead.</p>
+{% elif demo %}
+<form action="{{ demo_compress_url }}" method="post">
+  <label>Method
+    <select name="method">
+      {% for method in methods %}<option value="{{ method }}">{{ method }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit">Compress (demo result)</button>
+</form>
+<p>No file is compressed in demo mode; the result page shows seeded data.</p>
+{% else %}
+<form action="{{ url_for('compress_file', file_id=file_id) }}" method="post">
+  <label>Method
+    <select name="method">
+      {% for method in methods %}<option value="{{ method }}">{{ method }}</option>{% endfor %}
+    </select>
+  </label>
+  <button type="submit">Compress</button>
+</form>
+{% if compressed %}<p>A compressed file is ready — see the result page or
+<a href="{{ url_for('download', file_id=file_id) }}">download it</a>.</p>{% endif %}
+{% endif %}
+{% endblock %}

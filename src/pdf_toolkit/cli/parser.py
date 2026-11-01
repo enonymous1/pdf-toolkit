@@ -63,6 +63,27 @@ def create_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("gui", help="Open the drag-and-drop GUI (needs pdf-toolkit[gui])")
 
+    web_parser = sub.add_parser("web", help="Serve the browser frontend (needs pdf-toolkit[web])")
+    web_parser.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
+    web_parser.add_argument("--port", type=int, default=5000, help="Port to bind (default: 5000)")
+    web_parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Allow binding to a non-loopback host (the server has no authentication)",
+    )
+    web_parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Serve seeded demo data instead of processing uploads",
+    )
+    web_parser.add_argument(
+        "--upload-dir", help="Directory for uploaded files (default: a fresh temp directory)"
+    )
+    web_parser.add_argument(
+        "--freeze-dir",
+        help="Write the frozen demo site to this directory and exit (implies --demo)",
+    )
+
     split_parser = sub.add_parser(
         "split", help="Split a PDF into one file per chapter (dry-run by default)"
     )

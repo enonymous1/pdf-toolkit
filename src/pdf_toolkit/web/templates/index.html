@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}pdf-toolkit web{% endblock %}
+{% block body %}
+<h1>pdf-toolkit web</h1>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if frozen %}
+<p><em>Frozen demo.</em> Uploads do not work on the static Pages demo — it is
+view-only. See the <a href="/demo/sample">demo sample</a> for a seeded
+inspection and compression result.</p>
+{% elif demo %}
+<p>This is the demo server: no uploads are processed here. Start with the
+<a href="/demo/sample">demo sample</a>, or run the server without
+<code>--demo</code> to upload a real PDF.</p>
+{% else %}
+<div class="drop" id="drop">Drop a PDF here, or use the form below.</div>
+<form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+  <input type="file" name="pdf" id="pdf" accept=".pdf" required>
+  <button type="submit">Upload and inspect</button>
+</form>
+<script>
+var drop = document.getElementById('drop');
+var input = document.getElementById('pdf');
+drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.className = 'drop over'; });
+drop.addEventListener('dragleave', function () { drop.className = 'drop'; });
+drop.addEventListener('drop', function (e) {
+  e.preventDefault(); drop.className = 'drop';
+  input.files = e.dataTransfer.files;
+  input.form.submit();
+});
+</script>
+{% endif %}
+{% endblock %}

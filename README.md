@@ -44,6 +44,11 @@ pdf-toolkit compress document.pdf -o ./out/ -y --method ghostscript --gs-quality
 
 # GUI
 pdf-toolkit gui
+# or the browser frontend (loopback only by default; --demo serves seeded data)
+pdf-toolkit web
+pdf-toolkit web --demo
+# Freeze the demo to static HTML for a GitHub Pages demo (view-only)
+pdf-toolkit web --freeze-dir ./_site
 
 # Split into chapters (dry-run first: prints the proposed ranges)
 pdf-toolkit split document.pdf
@@ -120,6 +125,7 @@ reconstruct_pdf_pages("document.pdf", result.matched_pages, "./recon/")
 |---|---|
 | *(none)* | Core: PyMuPDF, pypdf, pdfminer.six, pdfplumber, rich |
 | `pdf-toolkit[gui]` | PyQt6 GUI |
+| `pdf-toolkit[web]` | Flask browser frontend (`web`, `--demo`, `--freeze-dir`) |
 | `pdf-toolkit[tables]` | Camelot + tabula-py for `--tables` (tabula-py also needs Java) |
 | `pdf-toolkit[ocr]` | pytesseract, pdf2image, Pillow, numpy for OCR paths |
 | `pdf-toolkit[export]` | pymupdf4llm + pdf2docx for `--export md` / `--export docx` |
@@ -194,6 +200,7 @@ pdf-toolkit/
 - 0.6.0 (staff review fixes, no new commands) — the version is now single-sourced from `pdf_toolkit.__version__` (0.5.0 shipped with pyproject at 0.5.0 and `__init__` at 0.4.0, and `license = "MIT"` in pyproject, which current setuptools rejects; both are fixed and the wheel builds as 0.6.0). Compression and splitting are atomic: a failed run leaves no partial output, and a failed split leaves no chapter files. An invalid page spec in the export converters now raises instead of silently exporting different pages per converter. The preview server refuses a non-loopback host unless `--allow-remote` is passed. `import fitz` is replaced with `import pymupdf` throughout (PyMuPDF 2.0 still ships `fitz` only as a deprecated shim that warns on import, and it will be removed in a future release). The CLI is split into a `cli/` package (one module per command family; `from pdf_toolkit.cli import main` still works), optional imports go through one shared helper, shared defaults live in `_defaults.py`, citations window scoring reuses precomputed normalized text, and mypy now runs in CI with zero errors on `src/pdf_toolkit`.
 - 0.6.1 (mypy CI fix, no behaviour change) — the 0.6.0 mypy gate failed in CI on `ocr_utils.py`: mypy infers a module variable's type from its first assignment, so `cv2 = None` in the optional-import fallback fails as soon as OpenCV is installed (CI installs the dissect extra; a checkout without it sees Any and passes silently, which is why the failure was invisible locally). The fallback assignments now carry `# type: ignore[assignment]`, the same treatment applied to the export converters' optional imports, and the image array in the OCR path is annotated as a bare `ndarray` so its preprocessing reassignment typechecks. CI now also runs mypy in the extras-smoke job, where every extra is installed, so this class of error is caught even for modules the main job's install set doesn't cover.
 - 0.6.2 (mypy CI fix, no behaviour change) — the 0.6.1 extras-smoke mypy step failed in CI on PyQt6's own `QtGui.pyi` stubs, which contain invalid syntax (`*args, /`). The first fix attempt, `--exclude 'gui'`, did not work, and the reason matters: the chain is not our gui package at all. Pillow's `Image` module imports `ImageQt`, which imports PyQt6, so mypy parses the broken stubs whenever Pillow and PyQt6 are both installed, and mypy follows imports regardless of `--exclude` (and `follow_imports = "skip"` does not help either, since mypy still parses the stub to resolve the import). The mypy step therefore moved out of extras-smoke into its own job that installs every extra *except* gui; with PyQt6 absent its stubs are never parsed, and the gui files are still checked with Qt names as Any. That job also caught a real error the previous runs had hidden: `ocr_engine.py` passed `None` for `first_page`/`last_page`, which pdf2image's typed signature rejects, so it now only passes those arguments when a page range is given (its runtime defaults are already `None`, so behaviour is unchanged).
+- 0.7.0 (Flask web frontend, PyQt GUI kept) — new `pdf-toolkit web` command (needs `pdf-toolkit[web]`): a local Flask app for uploading a PDF, inspecting it, compressing it with any method, and downloading the result, with the same loopback-only host guard as the dissect preview server. `pdf-toolkit web --demo` serves seeded fixture data instead of processing uploads, and `pdf-toolkit web --freeze-dir` renders that demo to static HTML for a GitHub Pages demo; the frozen pages render their forms disabled and labelled view-only, because Pages cannot run the server, and there is deliberately no demo download. Demo numbers are real measurements of `examples/sample_example.pdf` (3 pages, 3,784 bytes, structural compression to 1,756 bytes), frozen in `web/demo_data.py`, not invented. A Pages workflow deploys the frozen demo on push to main (one-time owner step: Settings → Pages → Source: GitHub Actions).
 
 Two fixes from the merge are worth knowing about: the old inspector's example metadata scripts imported a `normalize_pdf_metadata` name the package never exported (it is now an alias for `normalize_metadata`), and the old tool's module created a `pdf_compressor.log` file in the working directory on import (logging is now the caller's job, and importing the compressor has no side effects). The old projects' single-commit histories, which carried personal email addresses, were not carried over; this repo starts with a clean history under the `enonymous1` identity.
 

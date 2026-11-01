@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}pdf-toolkit web{% endblock %}</title>
+  <style>
+    body{font-family:system-ui, Arial, sans-serif; padding:20px; max-width:760px; margin:0 auto}
+    table{border-collapse:collapse}
+    th,td{border:1px solid #ddd; padding:6px 10px; text-align:left}
+    .banner{background:#fff8e1; border:1px solid #f0d98c; padding:10px; margin-bottom:16px}
+    .error{background:#fdecea; border:1px solid #f5c6c6; padding:10px; margin-bottom:16px}
+    .drop{border:2px dashed #999; border-radius:6px; padding:24px; text-align:center; margin-bottom:12px}
+    .drop.over{border-color:#339933; background:#f2faf2}
+  </style>
+</head>
+<body>
+  <p><a href="{{ url_for('index') }}">pdf-toolkit web</a></p>
+  {% if demo %}
+  <div class="banner"><strong>Demo data.</strong> This page shows seeded fixture
+  data, not a result for a file you uploaded. Live uploads always run the real
+  inspector and compressor.</div>
+  {% endif %}
+  {% block body %}{% endblock %}
+</body>
+</html>
