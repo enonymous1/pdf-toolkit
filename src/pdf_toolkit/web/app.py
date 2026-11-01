@@ -20,11 +20,12 @@ Freeze (``freeze_demo``): renders the demo routes with Flask's
 test client and writes static HTML. Frozen pages are requested
 with ``?frozen=1`` so their forms render disabled with a note that
 the frozen Pages demo is view-only, instead of presenting forms
-that cannot submit as if they worked. The frozen site is meant to
-be served from a site root (the Pages workflow deploys the frozen
-directory as the whole site), so templates use ``url_for`` absolute
-paths; do not drop the frozen output into a subpath and expect its
-links to follow.
+that cannot submit as if they worked. Templates use ``url_for``
+absolute paths, which break on a project Pages site (served under
+``/<repo>/``, so ``/demo/sample`` resolves off-site and 404s);
+``freeze_demo`` therefore rewrites the frozen routes' links to
+paths relative to each page, so the frozen site works at any
+subpath — the same relative-link rule as the other frozen demos.
 
 Uploaded files live only under the configured upload directory
 (a fresh temp directory by default). Download and file routes
@@ -35,6 +36,8 @@ confinement pattern as the dissect preview server.
 from __future__ import annotations
 
 import io
+import posixpath
+import re
 import tempfile
 import uuid
 from pathlib import Path
@@ -303,12 +306,37 @@ class _DemoResult:
         self.error = data["error"]
 
 
+# Frozen routes, as paths without a leading slash. Only these are
+# rewritten: anything else (none currently) keeps its rendered href.
+_FROZEN_TARGETS = {"", "demo/sample", "demo/sample/compressed"}
+_HREF_RE = re.compile(r'href="(/[^"]*)"')
+
+
+def _relative_href(page_rel: str, target: str) -> str | None:
+    """Rewrite an absolute frozen-route link to a page-relative one.
+
+    ``page_rel`` is the frozen page's path (e.g.
+    ``demo/sample/index.html``), ``target`` the rendered href (e.g.
+    ``/demo/sample``). Returns None for targets that are not frozen
+    routes, so unknown links are left untouched rather than mangled.
+    """
+    stripped = target.lstrip("/")
+    if stripped not in _FROZEN_TARGETS:
+        return None
+    page_dir = posixpath.dirname(page_rel)
+    rel = posixpath.relpath(stripped or ".", page_dir or ".")
+    if rel == ".":
+        return "./"
+    return rel + "/"
+
+
 def freeze_demo(out_dir: str | Path) -> list[str]:
     """Render the demo routes to static HTML under *out_dir*.
 
     Returns the list of written paths, relative to *out_dir*.
     Frozen pages are requested with ``?frozen=1`` (see the module
-    docstring) and written without the query string.
+    docstring) and written without the query string, with their
+    links rewritten to page-relative paths (see ``_relative_href``).
     """
     app = create_app(demo=True)
     client = app.test_client()
@@ -323,9 +351,14 @@ def freeze_demo(out_dir: str | Path) -> list[str]:
         response = client.get(url)
         if response.status_code != 200:
             raise RuntimeError(f"Freezing {url} failed with status {response.status_code}")
+        html = response.data.decode("utf-8")
+        html = _HREF_RE.sub(
+            lambda m: f'href="{_relative_href(rel, m.group(1)) or m.group(1)}"',
+            html,
+        )
         target = out / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(response.data)
+        target.write_text(html, encoding="utf-8")
         written.append(rel)
     return written
 

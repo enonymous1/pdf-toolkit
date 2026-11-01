@@ -124,6 +124,17 @@ def test_freeze_demo_writes_static_pages(tmp_path):
     assert DEMO_INSPECT["name"] in sample
     compressed = (tmp_path / "demo/sample/compressed/index.html").read_text(encoding="utf-8")
     assert "Frozen demo" in compressed
+    # Project Pages serves the site under /<repo>/, so absolute links
+    # ("/demo/sample") resolve off-site and 404. Frozen links must be
+    # page-relative: index -> sample, sample -> compressed and home,
+    # compressed -> sample and home.
+    for page in (index, sample, compressed):
+        assert 'href="/' not in page
+    assert 'href="demo/sample/"' in index
+    assert 'href="compressed/"' in sample
+    assert 'href="../../"' in sample
+    assert 'href="../"' in compressed
+    assert 'href="../../../"' in compressed
 
 
 def test_run_server_refuses_non_loopback():

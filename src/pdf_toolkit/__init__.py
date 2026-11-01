@@ -6,6 +6,6 @@ module can never drift apart again (0.5.0 in pyproject vs 0.4.0 here
 was a real bug, caught by the 0.6.0 staff review).
 """
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 __all__ = ["__version__"]

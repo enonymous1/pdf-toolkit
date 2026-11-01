@@ -20,4 +20,9 @@ compressed file for download.</p>
 {% else %}
 <div class="error">Compression failed: {{ result.error }}</div>
 {% endif %}
+{% if demo %}
+<p><a href="/demo/sample">Back to the demo sample</a></p>
+{% elif not frozen %}
+<p><a href="{{ url_for('file_page', file_id=file_id) }}">Back to the file</a></p>
+{% endif %}
 {% endblock %}
