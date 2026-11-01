@@ -2,15 +2,17 @@ import pymupdf
 
 from .ocr_utils import get_ocr_text_robust
 
+# Same type: ignore pattern as ocr_utils: without it, mypy fails the
+# None assignment as soon as the export extra is installed.
 try:
     import pymupdf4llm
 except ImportError:
-    pymupdf4llm = None
+    pymupdf4llm = None  # type: ignore[assignment]
 
 try:
     from pdf2docx import Converter
 except ImportError:
-    Converter = None
+    Converter = None  # type: ignore[assignment]
 
 
 def _page_indices(spec: str | None, total: int) -> range:

@@ -36,7 +36,7 @@ def test_version_is_single_sourced():
     assert (
         pyproject["tool"]["setuptools"]["dynamic"]["version"]["attr"] == "pdf_toolkit.__version__"
     )
-    assert __version__ == "0.6.0"
+    assert __version__ == "0.6.1"
 
 
 def test_page_indices_valid_and_invalid():

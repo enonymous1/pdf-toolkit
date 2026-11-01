@@ -2,6 +2,12 @@ import re
 
 import pymupdf
 
+# Optional imports: mypy infers a module variable's type from its
+# first assignment, so the `= None` fallback fails as soon as the
+# module *is* installed (which is exactly what CI does, via the
+# dissect extra, while a checkout without the extra sees Any and
+# passes silently). The ignores below are the standard workaround
+# for that pattern; they are harmless when the module is absent.
 try:
     # Configure tesseract path
     import os as _os
@@ -12,13 +18,13 @@ try:
     if _os.environ.get("TESSERACT_CMD"):
         pytesseract.pytesseract.tesseract_cmd = _os.environ["TESSERACT_CMD"]
 except ImportError:
-    pytesseract = None
-    Output = None
+    pytesseract = None  # type: ignore[assignment]
+    Output = None  # type: ignore[assignment]
 
 try:
     import cv2
 except ImportError:
-    cv2 = None
+    cv2 = None  # type: ignore[assignment]
 
 
 def clean_ocr_token(text: str) -> str:
@@ -51,7 +57,10 @@ def get_ocr_text_robust(page: pymupdf.Page, dpi: int = 400) -> str:
 
         # 1. High DPI Rendering for small text fidelity
         pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
-        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w)
+        # Bare ndarray: the preprocessing below reassigns img to a
+        # differently-typed array (255 - cleaned), which mypy rejects
+        # against the precise uint8 2D type inferred from this line.
+        img: np.ndarray = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w)
 
         # 2. Preprocessing
         if cv2:

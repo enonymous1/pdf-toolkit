@@ -52,3 +52,10 @@ jobs:
         run: |
           python -c "import camelot, tabula, pytesseract, pdf2image, pymupdf4llm, pdf2docx, docx, openpyxl, cv2, flask, docxtpl, reportlab, numpy, PIL"
           python -c "from pdf_toolkit.cli import main; from pdf_toolkit.gui.main_gui import PdfDropWindow"
+      # The main job's mypy only sees the dissect/citations extras, so
+      # optional-import typing errors in other extras (like the 0.6.0
+      # ocr_utils failure, which only appeared once OpenCV was
+      # installed) would slip through. This job has every extra, so
+      # run mypy here too.
+      - name: Typecheck with all extras installed
+        run: mypy src/pdf_toolkit
