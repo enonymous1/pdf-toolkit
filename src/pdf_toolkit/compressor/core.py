@@ -15,11 +15,15 @@ Importing this module has no side effects: unlike the original
 Callers (the CLI, the GUI) own logging.
 """
 
+import inspect
 import logging
 import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from .._atomic import atomic_output
+from .._defaults import GHOSTSCRIPT_COMPATIBILITY_LEVEL, GHOSTSCRIPT_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -78,16 +82,18 @@ def _finish(result: CompressionResult) -> CompressionResult:
 
 def compress_structural(input_path: Path, output_path: Path) -> CompressionResult:
     """Compress with PyMuPDF: garbage=4, deflate, clean."""
-    import fitz
+    import pymupdf
 
     input_path, output_path = Path(input_path), Path(output_path)
     _check_input(input_path)
     initial = input_path.stat().st_size
     try:
-        doc = fitz.open(str(input_path))
+        doc = pymupdf.open(str(input_path))
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            doc.save(str(output_path), garbage=4, deflate=True, clean=True)
+            # Save to a temp file and rename into place: a failed save
+            # must not leave a partial file at output_path.
+            with atomic_output(output_path) as tmp_path:
+                doc.save(str(tmp_path), garbage=4, deflate=True, clean=True)
         finally:
             doc.close()
     except Exception as exc:
@@ -134,9 +140,9 @@ def compress_pypdf(
                 writer.pages[i].compress_content_streams()
         if not remove_metadata and original_metadata:
             writer.add_metadata(original_metadata)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "wb") as fh:
-            writer.write(fh)
+        with atomic_output(output_path) as tmp_path:
+            with open(tmp_path, "wb") as fh:
+                writer.write(fh)
     except Exception as exc:
         logger.error("pypdf compression failed for %s: %s", input_path, exc)
         return CompressionResult(
@@ -189,26 +195,40 @@ def compress_ghostscript(
             error="Ghostscript executable not found on PATH "
             "(install Ghostscript from ghostscript.com and add it to PATH)",
         )
-    command = [
-        gs,
-        "-sDEVICE=pdfwrite",
-        "-dCompatibilityLevel=1.4",
-        f"-dPDFSETTINGS=/{quality}",
-        "-dNOPAUSE",
-        "-dQUIET",
-        "-dBATCH",
-        f"-sOutputFile={output_path}",
-        str(input_path),
-    ]
+    # Ghostscript writes directly to -sOutputFile, so point it at a temp
+    # file and rename into place: a failed run must not leave a partial
+    # PDF at output_path, and a hung run must not hang the CLI forever.
     try:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+        with atomic_output(output_path) as tmp_path:
+            command = [
+                gs,
+                "-sDEVICE=pdfwrite",
+                f"-dCompatibilityLevel={GHOSTSCRIPT_COMPATIBILITY_LEVEL}",
+                f"-dPDFSETTINGS=/{quality}",
+                "-dNOPAUSE",
+                "-dQUIET",
+                "-dBATCH",
+                f"-sOutputFile={tmp_path}",
+                str(input_path),
+            ]
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=GHOSTSCRIPT_TIMEOUT_SECONDS,
+            )
+    except subprocess.TimeoutExpired as exc:
+        logger.error("Ghostscript timed out for %s: %s", input_path, exc)
+        return CompressionResult(
+            False,
+            input_path,
+            output_path,
+            "ghostscript",
+            initial_size=initial,
+            error=f"Ghostscript timed out after {GHOSTSCRIPT_TIMEOUT_SECONDS}s",
         )
     except subprocess.CalledProcessError as exc:
         logger.error("Ghostscript failed for %s: %s", input_path, exc.stderr)
@@ -241,20 +261,46 @@ def compress_ghostscript(
     )
 
 
+_ENGINES = {
+    "structural": compress_structural,
+    "pypdf": compress_pypdf,
+    "ghostscript": compress_ghostscript,
+}
+
+
 def compress_pdf(
     input_path: Path,
     output_path: Path,
     method: str = "structural",
     **kwargs,
 ) -> CompressionResult:
-    """Dispatch to one compression method by name."""
-    if method == "structural":
-        return compress_structural(input_path, output_path)
-    if method == "pypdf":
-        return compress_pypdf(input_path, output_path, **kwargs)
-    if method == "ghostscript":
-        return compress_ghostscript(input_path, output_path, **kwargs)
-    raise ValueError(f"Unknown compression method {method!r}; choose from {', '.join(METHODS)}")
+    """Dispatch to one compression method by name.
+
+    Unknown methods still raise ValueError (that is a programming error,
+    not a per-file failure). An unknown keyword for a known method
+    returns a failed result instead of leaking a TypeError: the whole
+    point of CompressionResult is that callers do not have to catch
+    exceptions to learn that a file failed.
+    """
+    engine = _ENGINES.get(method)
+    if engine is None:
+        raise ValueError(f"Unknown compression method {method!r}; choose from {', '.join(METHODS)}")
+    input_path, output_path = Path(input_path), Path(output_path)
+    try:
+        initial = input_path.stat().st_size if input_path.exists() else 0
+    except OSError:
+        initial = 0
+    unexpected = sorted(set(kwargs) - set(inspect.signature(engine).parameters))
+    if unexpected:
+        return CompressionResult(
+            False,
+            input_path,
+            output_path,
+            method,
+            initial_size=initial,
+            error=f"Unknown option(s) for method {method!r}: {', '.join(unexpected)}",
+        )
+    return engine(input_path, output_path, **kwargs)
 
 
 # Backwards-compatible name from ss-pdf-small (returns the new result type).

@@ -11,7 +11,7 @@ import json
 import shutil
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from pdf_toolkit.cli import main as cli_main
@@ -44,7 +44,7 @@ needs_docx = pytest.mark.skipif(
 
 
 def _make_pdf(path: Path, pages: list[str]) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for text in pages:
         page = doc.new_page()
         page.insert_text((72, 72), text)
@@ -87,7 +87,7 @@ def test_page_texts_and_extract(tmp_path: Path):
     assert [p.page_number for p in pages] == [1, 2, 3]
     assert "alpha" in pages[0].text
     one = extract_pages_to_bytes(pdf, [2])
-    doc = fitz.open(stream=one, filetype="pdf")
+    doc = pymupdf.open(stream=one, filetype="pdf")
     assert doc.page_count == 1
     assert "beta" in doc.load_page(0).get_text("text")
     assert len(split_pdf_to_pages(pdf)) == 3
@@ -143,8 +143,8 @@ def test_image_template_match_identical_page(tmp_path: Path):
     from pdf_toolkit.dissect import image_template_match
 
     pdf = _make_pdf(tmp_path / "doc.pdf", ["Form Title"])
-    doc = fitz.open(str(pdf))
-    pix = doc.load_page(0).get_pixmap(matrix=fitz.Matrix(150 / 72, 150 / 72), alpha=False)
+    doc = pymupdf.open(str(pdf))
+    pix = doc.load_page(0).get_pixmap(matrix=pymupdf.Matrix(150 / 72, 150 / 72), alpha=False)
     pix.save(str(tmp_path / "template.png"))
     doc.close()
     res = image_template_match(pdf, tmp_path / "template.png", threshold=0.7, dpi=150)
@@ -189,7 +189,7 @@ def test_fillable_pdf_fill_roundtrip():
     filled = fill_pdf_fields(pdf_bytes, {"field_0": "Alice"}, fields=boxes, dpi=150)
     fields = PdfReader(io.BytesIO(filled)).get_fields() or {}
     assert fields["field_0"].get("/V") == "Alice"
-    doc = fitz.open(stream=filled, filetype="pdf")
+    doc = pymupdf.open(stream=filled, filetype="pdf")
     assert "Alice" in doc.load_page(0).get_text("text")
 
 
@@ -220,7 +220,7 @@ def test_fill_overlay_fallback_and_path_rejection(tmp_path: Path):
     plain = pdf.read_bytes()
     boxes = {1: [FieldBox(name="field_0", x=50, y=50, w=300, h=40)]}
     filled = fill_pdf_fields(plain, {"field_0": "Hello"}, fields=boxes, dpi=150)
-    doc = fitz.open(stream=filled, filetype="pdf")
+    doc = pymupdf.open(stream=filled, filetype="pdf")
     assert "Hello" in doc.load_page(0).get_text("text")
     with pytest.raises(FillError):
         fill_pdf_fields(str(pdf), {"field_0": "Hello"})
@@ -235,7 +235,7 @@ def test_fill_overlay_shrinks_font_for_short_boxes(tmp_path: Path):
     pdf = _make_pdf(tmp_path / "plain.pdf", ["plain page"])
     boxes = {1: [FieldBox(name="field_0", x=210, y=133, w=215, h=23)]}
     filled = fill_pdf_fields(pdf.read_bytes(), {"field_0": "Alice"}, fields=boxes, dpi=150)
-    doc = fitz.open(stream=filled, filetype="pdf")
+    doc = pymupdf.open(stream=filled, filetype="pdf")
     assert "Alice" in doc.load_page(0).get_text("text")
 
 
@@ -244,11 +244,11 @@ def test_fill_overlay_shrinks_font_for_short_boxes(tmp_path: Path):
 def test_reconstruct_end_to_end(tmp_path: Path):
     from pdf_toolkit.dissect import reconstruct_pdf_pages
 
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=612, height=792)
     page.insert_text((72, 72), "Form Title Name Signature")
-    page.draw_rect(fitz.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
-    page.draw_rect(fitz.Rect(72, 180, 400, 210), color=(0, 0, 0), width=2)
+    page.draw_rect(pymupdf.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
+    page.draw_rect(pymupdf.Rect(72, 180, 400, 210), color=(0, 0, 0), width=2)
     pdf = tmp_path / "form.pdf"
     doc.save(str(pdf))
     doc.close()
@@ -263,7 +263,7 @@ def test_reconstruct_end_to_end(tmp_path: Path):
     assert isinstance(fieldmap, list) and len(fieldmap) == info["fields_detected"]
     assert "<input" in Path(info["html"]).read_text(encoding="utf-8")
     assert Path(info["fillable_pdf"]).read_bytes().startswith(b"%PDF")
-    extracted = fitz.open(stream=Path(info["extracted_pdf"]).read_bytes(), filetype="pdf")
+    extracted = pymupdf.open(stream=Path(info["extracted_pdf"]).read_bytes(), filetype="pdf")
     assert extracted.page_count == 1
 
 
@@ -312,10 +312,10 @@ def test_cli_dissect_missing_pdf_returns_2(tmp_path: Path):
 @needs_cv2
 @needs_reportlab
 def test_cli_dissect_reconstruct_fill_export_docx(tmp_path: Path):
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=612, height=792)
     page.insert_text((72, 72), "Form Title Name Signature")
-    page.draw_rect(fitz.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
+    page.draw_rect(pymupdf.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
     pdf = tmp_path / "form.pdf"
     doc.save(str(pdf))
     doc.close()
@@ -386,10 +386,10 @@ def test_server_confined_to_root(tmp_path: Path):
 
     from pdf_toolkit.dissect import create_app, reconstruct_pdf_pages
 
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=612, height=792)
     page.insert_text((72, 72), "Form Title")
-    page.draw_rect(fitz.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
+    page.draw_rect(pymupdf.Rect(72, 120, 400, 150), color=(0, 0, 0), width=2)
     pdf = tmp_path / "form.pdf"
     doc.save(str(pdf))
     doc.close()

@@ -9,7 +9,7 @@ formatting-checker tests.
 import json
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from pdf_toolkit.citations import extract_chunks_from_docx, extract_pages_from_pdf
@@ -35,7 +35,7 @@ def _make_docx(path: Path, paragraphs=(), table_cells=()) -> Path:
 
 
 def _make_pdf(path: Path, page_texts) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     for text in page_texts:
         page = doc.new_page()
         page.insert_text((72, 72), text, fontsize=12)

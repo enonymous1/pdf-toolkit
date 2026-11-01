@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-import fitz
+import pymupdf
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -14,7 +14,7 @@ console = Console()
 class PDFExplorer:
     def __init__(self, path: str):
         self.path = path
-        self.doc = fitz.open(path)
+        self.doc = pymupdf.open(path)
 
     def show_summary(self):
         table = Table(

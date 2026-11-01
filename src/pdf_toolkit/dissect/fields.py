@@ -12,18 +12,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 
+from .._defaults import DEFAULT_DPI
 from .detect import require_cv2
 from .models import FieldBox
 
 __all__ = ["detect_field_contours", "render_page_to_image", "render_pdf_pages"]
 
 
-def render_page_to_image(page: fitz.Page, dpi: int = 150):
+def render_page_to_image(page: pymupdf.Page, dpi: int = DEFAULT_DPI):
     """Render a PyMuPDF page to an OpenCV-compatible BGR NumPy array."""
     cv2, np = require_cv2()
-    pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(dpi / 72, dpi / 72), alpha=False)
     arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
     if pix.n == 4:
         arr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
@@ -32,10 +33,10 @@ def render_page_to_image(page: fitz.Page, dpi: int = 150):
     return arr
 
 
-def render_pdf_pages(pdf_path: str | Path, dpi: int = 150) -> dict[int, object]:
+def render_pdf_pages(pdf_path: str | Path, dpi: int = DEFAULT_DPI) -> dict[int, object]:
     """Render every page of *pdf_path*; returns ``{1-based page: BGR array}``."""
     try:
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
     except Exception as exc:
         raise ValueError(f"Failed to open PDF '{pdf_path}': {exc}") from exc
     try:

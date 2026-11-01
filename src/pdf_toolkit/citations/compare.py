@@ -49,7 +49,9 @@ def _fuzz():
     return fuzz
 
 
-def _token_coverage(chunk_tokens: frozenset[str], window_tokens: frozenset[str]) -> float:
+def _token_coverage(
+    chunk_tokens: frozenset[str], window_tokens: set[str] | frozenset[str]
+) -> float:
     """Fraction of the chunk's tokens present in the window."""
     if not chunk_tokens:
         return 0.0
@@ -99,9 +101,21 @@ def compare_chunks_to_pages(
 
     fuzz = _fuzz()
 
-    prepared_pages: list[tuple[SourcePage, list[tuple[str, frozenset[str]]]]] = [
-        (page, [(sentence, token_set(sentence)) for sentence in page.sentences]) for page in pages
+    # Precompute each page's sentences once: tokens for the prefilter
+    # and the normalized text for scoring. The old code called
+    # normalize_text(window_text) for every chunk against every window,
+    # re-normalizing the same windows tens of thousands of times.
+    prepared_pages: list[tuple[SourcePage, list[tuple[str, frozenset[str], str]]]] = [
+        (
+            page,
+            [
+                (sentence, token_set(sentence), normalize_text(sentence))
+                for sentence in page.sentences
+            ],
+        )
+        for page in pages
     ]
+    pages_by_number = {page.page_number: page for page, _ in prepared_pages}
 
     results: list[Match] = []
     for chunk in chunks:
@@ -126,17 +140,23 @@ def compare_chunks_to_pages(
             for i in range(len(sentence_data)):
                 window_tokens: set[str] = set()
                 window_sentences: list[str] = []
+                window_normalized: list[str] = []
                 for w in range(1, max_window + 1):
                     j = i + w
                     if j > len(sentence_data):
                         break
-                    sentence, sentence_tokens = sentence_data[j - 1]
+                    sentence, sentence_tokens, sentence_normalized = sentence_data[j - 1]
                     window_sentences.append(sentence)
+                    window_normalized.append(sentence_normalized)
                     window_tokens |= sentence_tokens
                     if _token_coverage(chunk_token_set, window_tokens) < min_overlap:
                         continue
                     window_text = " ".join(window_sentences)
-                    raw_score = fuzz.partial_ratio(normalized_chunk, normalize_text(window_text))
+                    # Joining pre-normalized sentences equals normalizing
+                    # the joined text here: normalization lowercases,
+                    # drops punctuation, and collapses whitespace, none
+                    # of which depends on the window boundary.
+                    raw_score = fuzz.partial_ratio(normalized_chunk, " ".join(window_normalized))
                     score = int(round(raw_score))
                     # Prefer a higher score, then the shortest window that
                     # achieves it: partial_ratio hits 100 for any window
@@ -155,10 +175,7 @@ def compare_chunks_to_pages(
         if best_score >= threshold and best_page is not None:
             if not _is_meaningful_snippet(best_snippet, min_pdf_snippet_length):
                 continue
-            page_obj = next(
-                (page for page, _ in prepared_pages if page.page_number == best_page),
-                None,
-            )
+            page_obj = pages_by_number.get(best_page)
             pdf_context = ""
             if page_obj is not None:
                 pdf_context = _build_context(

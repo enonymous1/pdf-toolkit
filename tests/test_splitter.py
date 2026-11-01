@@ -6,7 +6,7 @@ a contents page, plus a contents-heavy variant for heading location.
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 from pypdf import PdfReader
 
@@ -25,7 +25,7 @@ from pdf_toolkit.splitter import (
 
 
 def make_split_fixture(path: Path, outlines: bool = True) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     doc.set_metadata({"title": "Fixture Manual", "author": "Fixture Author"})
     page = doc.new_page()
     page.insert_text((72, 72), "Fixture Manual", fontsize=18)
@@ -46,7 +46,7 @@ def make_split_fixture(path: Path, outlines: bool = True) -> Path:
 
 
 def make_locate_fixture(path: Path) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "Fixture Manual", fontsize=18)
     page = doc.new_page()

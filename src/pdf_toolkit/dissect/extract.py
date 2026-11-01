@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 from .models import PageData
 
@@ -21,9 +21,9 @@ class ExtractionError(Exception):
     pass
 
 
-def _open(pdf_path: str | Path) -> fitz.Document:
+def _open(pdf_path: str | Path) -> pymupdf.Document:
     try:
-        return fitz.open(str(pdf_path))
+        return pymupdf.open(str(pdf_path))
     except Exception as exc:
         raise ExtractionError(f"Failed to open PDF '{pdf_path}': {exc}") from exc
 
@@ -46,7 +46,7 @@ def extract_pages_to_bytes(pdf_path: str | Path, page_numbers: list[int]) -> byt
         raise ExtractionError("No page numbers provided")
     src = _open(pdf_path)
     try:
-        out = fitz.open()
+        out = pymupdf.open()
         for page_number in page_numbers:
             if page_number < 1 or page_number > src.page_count:
                 raise ExtractionError(f"Page number out of range: {page_number}")
@@ -62,7 +62,7 @@ def split_pdf_to_pages(pdf_path: str | Path) -> list[bytes]:
     try:
         pages: list[bytes] = []
         for i in range(src.page_count):
-            out = fitz.open()
+            out = pymupdf.open()
             out.insert_pdf(src, from_page=i, to_page=i)
             pages.append(out.write())
         return pages

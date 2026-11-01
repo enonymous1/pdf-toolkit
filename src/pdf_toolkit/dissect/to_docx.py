@@ -13,6 +13,7 @@ import io
 import json
 from pathlib import Path
 
+from .._defaults import DEFAULT_DPI
 from .models import FieldBox
 
 __all__ = ["DocxError", "export_document_to_docx", "fill_docx_template", "page_to_docx"]
@@ -23,14 +24,15 @@ class DocxError(Exception):
 
 
 def _require_docx():
-    try:
-        from docx import Document
-        from docx.shared import Inches
-    except ImportError as exc:
-        raise DocxError(
-            'DOCX export needs python-docx. Install it with: pip install "pdf-toolkit[dissect]"'
-        ) from exc
-    return Document, Inches
+    from .._optional import require_module
+
+    docx = require_module(
+        "docx",
+        extra="dissect",
+        purpose="DOCX export",
+        error_type=DocxError,
+    )
+    return docx.Document, docx.shared.Inches
 
 
 def _image_bytes_and_size(image, dpi: int):
@@ -62,7 +64,9 @@ def _add_field_table(doc, fields: list[FieldBox]) -> None:
         row[1].text = f"{{{{ {name} }}}}"
 
 
-def page_to_docx(image, fields: list[FieldBox], out_path: str | Path, dpi: int = 150) -> None:
+def page_to_docx(
+    image, fields: list[FieldBox], out_path: str | Path, dpi: int = DEFAULT_DPI
+) -> None:
     """Write one page (image + field table) to a .docx file."""
     Document, Inches = _require_docx()
     doc = Document()
@@ -89,7 +93,7 @@ def fill_docx_template(template_path: str | Path, data: dict, out_path: str | Pa
 
 
 def export_document_to_docx(
-    doc_dir: str | Path, out_path: str | Path, fill_data: dict | None = None, dpi: int = 150
+    doc_dir: str | Path, out_path: str | Path, fill_data: dict | None = None, dpi: int = DEFAULT_DPI
 ) -> None:
     """Export a reconstructed document directory (``images/`` + ``html/``) to one .docx.
 

@@ -17,8 +17,9 @@ import os
 from pathlib import Path
 from typing import Union
 
-import fitz
+import pymupdf
 
+from .._defaults import DEFAULT_DPI
 from .extract import page_texts
 from .models import DetectionResult, PageData
 
@@ -37,14 +38,14 @@ class DetectionError(Exception):
 
 def require_cv2():
     """Import cv2/numpy, or raise a readable error naming the extra."""
-    try:
-        import cv2
-        import numpy as np
-    except ImportError as exc:
-        raise DetectionError(
-            "Image template matching needs OpenCV and NumPy. "
-            'Install them with: pip install "pdf-toolkit[dissect]"'
-        ) from exc
+    from .._optional import require_module
+
+    cv2 = require_module(
+        "cv2", extra="dissect", purpose="Image template matching", error_type=DetectionError
+    )
+    np = require_module(
+        "numpy", extra="dissect", purpose="Image template matching", error_type=DetectionError
+    )
     return cv2, np
 
 
@@ -91,8 +92,8 @@ def _ssim_gray(img1, img2) -> float:
     return float(ssim_map.mean())
 
 
-def _page_to_bgr(page: fitz.Page, dpi: int, cv2, np):
-    pix = page.get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
+def _page_to_bgr(page: pymupdf.Page, dpi: int, cv2, np):
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(dpi / 72, dpi / 72), alpha=False)
     arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
     if pix.n == 4:
         arr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
@@ -105,7 +106,7 @@ def image_template_match(
     pdf_path: str | Path,
     template_path: str | Path,
     threshold: float = 0.7,
-    dpi: int = 150,
+    dpi: int = DEFAULT_DPI,
 ) -> DetectionResult:
     """Match pages whose rendered image is SSIM-similar to *template_path*.
 
@@ -124,11 +125,12 @@ def image_template_match(
     matched_pages: list[int] = []
     scores: dict[int, float] = {}
     try:
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
     except Exception as exc:
         raise DetectionError(f"Failed to open PDF '{pdf_path}': {exc}") from exc
     try:
-        for page in doc:
+        for page_index in range(doc.page_count):
+            page = doc.load_page(page_index)
             page_img = _page_to_bgr(page, dpi, cv2, np)
             tpl_resized = cv2.resize(
                 tpl, (page_img.shape[1], page_img.shape[0]), interpolation=cv2.INTER_AREA
@@ -175,6 +177,6 @@ def find_template_pages(
             pdf_path,
             template,
             threshold=kwargs.get("threshold", 0.7),
-            dpi=kwargs.get("dpi", 150),
+            dpi=kwargs.get("dpi", DEFAULT_DPI),
         )
     raise DetectionError("Unsupported template type")

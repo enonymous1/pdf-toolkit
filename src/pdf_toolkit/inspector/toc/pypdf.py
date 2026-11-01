@@ -1,11 +1,13 @@
 import re
-from typing import Dict, List, Optional
+from typing import Any
+
+from ..._defaults import TOC_HINT_PAGE
 
 TOC_LINE_RE = re.compile(r"^(?P<title>.+?)\s+(?:\.{2,}|\s+)\s*(?P<page>\d+)$")
 PAGE_NUM_RE = re.compile(r"(\d+)$")
 
 
-def _parse_lines(lines: List[str]) -> List[Dict]:
+def _parse_lines(lines: list[str]) -> list[dict[str, Any]]:
     entries = []
     for ln in lines:
         ln = ln.strip()
@@ -26,8 +28,8 @@ def _parse_lines(lines: List[str]) -> List[Dict]:
 
 
 def extract_toc_from_pdf(
-    path: str, hint_page: Optional[int] = 6, scan_after: int = 3
-) -> List[Dict]:
+    path: str, hint_page: int | None = TOC_HINT_PAGE, scan_after: int = 3
+) -> list[dict[str, Any]]:
     """Attempt to extract a TOC for a PDF using pypdf outlines or a text fallback (pdfplumber).
 
     Returns list of {title, page, raw} entries (may be empty). Page

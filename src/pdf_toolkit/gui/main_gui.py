@@ -5,15 +5,15 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from pdf_toolkit.compressor import compress_pdf, format_size
 
-# --- Check for PyMuPDF (fitz) for PDF preview ---
+# --- Check for PyMuPDF for PDF preview ---
 try:
-    import fitz  # PyMuPDF
+    import pymupdf  # PyMuPDF
 
     PYMUPDF_AVAILABLE = True
 except ImportError:
     PYMUPDF_AVAILABLE = False
     PDF_PREVIEW_ERROR_MESSAGE = (
-        "PyMuPDF (fitz) library not found. PDF preview will be disabled.\n"
+        "PyMuPDF library not found. PDF preview will be disabled.\n"
         "Install it with: pip install PyMuPDF"
     )
 
@@ -273,7 +273,7 @@ class PdfDropWindow(QtWidgets.QMainWindow):
                 self.render_and_cache_preview(None)
             self.update_preview_display()  # Ensure preview reflects current state
 
-    def render_and_cache_preview(self, file_path: str = None):
+    def render_and_cache_preview(self, file_path: str | None = None):
         self.current_preview_pixmap = None
         if not PYMUPDF_AVAILABLE:
             self.preview_area_label.setText("Preview unavailable (PyMuPDF missing).")
@@ -285,11 +285,11 @@ class PdfDropWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            doc = fitz.open(file_path)
+            doc = pymupdf.open(file_path)
             if doc.page_count > 0:
                 page = doc.load_page(0)
                 zoom = 150 / 72
-                matrix = fitz.Matrix(zoom, zoom)
+                matrix = pymupdf.Matrix(zoom, zoom)
                 pix = page.get_pixmap(matrix=matrix, alpha=False)
                 qimage = QtGui.QImage(
                     pix.samples,

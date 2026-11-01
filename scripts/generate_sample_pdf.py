@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def make_sample_pdf(path: str, pages: int = 3) -> Path:
@@ -12,7 +12,7 @@ def make_sample_pdf(path: str, pages: int = 3) -> Path:
     Returns the Path to the written file.
     """
     path = Path(path)
-    doc = fitz.open()
+    doc = pymupdf.open()
 
     for p in range(1, pages + 1):
         page = doc.new_page()

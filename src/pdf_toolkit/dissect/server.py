@@ -30,14 +30,29 @@ from pathlib import Path
 __all__ = ["create_app", "run_server"]
 
 
+LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
 def _require_flask():
-    try:
-        from flask import Flask, abort, jsonify, render_template, request, send_file
-    except ImportError as exc:
-        raise RuntimeError(
-            'The preview server needs Flask. Install it with: pip install "pdf-toolkit[dissect]"'
-        ) from exc
-    return Flask, abort, jsonify, render_template, request, send_file
+    # The server keeps its historical RuntimeError here: the CLI's serve
+    # runner catches RuntimeError, and changing the type would turn a
+    # missing-Flask message into a traceback for existing callers.
+    from .._optional import require_module
+
+    flask = require_module(
+        "flask",
+        extra="dissect",
+        purpose="The preview server",
+        error_type=RuntimeError,
+    )
+    return (
+        flask.Flask,
+        flask.abort,
+        flask.jsonify,
+        flask.render_template,
+        flask.request,
+        flask.send_file,
+    )
 
 
 def _resolve_within(root: Path, rel: str) -> Path | None:
@@ -236,6 +251,20 @@ def create_app(root: str | Path):
     return app
 
 
-def run_server(root: str | Path, host: str = "127.0.0.1", port: int = 5000) -> None:
-    """Serve reconstructed output under *root* on loopback (default)."""
+def run_server(
+    root: str | Path, host: str = "127.0.0.1", port: int = 5000, allow_remote: bool = False
+) -> None:
+    """Serve reconstructed output under *root* on loopback (default).
+
+    The server has no authentication, so a non-loopback host is
+    refused unless ``allow_remote`` is explicitly set. The guard runs
+    before Flask is even imported, so it works (and fails fast) on a
+    machine without the dissect extra installed.
+    """
+    if host not in LOOPBACK_HOSTS and not allow_remote:
+        raise ValueError(
+            f"Refusing to bind the unauthenticated preview server to {host!r}. "
+            "Use host 127.0.0.1 (the default), or pass allow_remote=True "
+            "if you really mean to expose it."
+        )
     create_app(root).run(host=host, port=port)

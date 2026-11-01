@@ -1,8 +1,9 @@
 import re
-from typing import Dict, List, Optional
+from typing import Any
 
-import fitz
+import pymupdf
 
+from ..._defaults import TOC_HINT_PAGE
 from ..extraction.ocr_utils import get_ocr_text_robust
 
 TOC_LINE_RE = re.compile(r"^(?P<title>.*?[A-Za-z].*?)\s+.*?[\.e_~x-]{2,}\s*(?P<page>\d+)")
@@ -12,8 +13,8 @@ PAGE_NUM_RE = re.compile(r"(\d+)\s*[\)\.]?\s*$")
 
 
 def extract_toc_from_pdf(
-    path: str, hint_page: Optional[int] = 6, scan_after: int = 15, use_ocr: bool = False
-) -> List[Dict]:
+    path: str, hint_page: int | None = TOC_HINT_PAGE, scan_after: int = 15, use_ocr: bool = False
+) -> list[dict[str, Any]]:
     """Try to extract a textual Table of Contents from a PDF using PyMuPDF.
 
     - path: path to PDF
@@ -23,7 +24,7 @@ def extract_toc_from_pdf(
 
     Returns a list of entries: {"title": str, "page": int, "raw": str}
     """
-    doc = fitz.open(path)
+    doc = pymupdf.open(path)
     total = doc.page_count
     # convert hint to 0-index
     start_idx = max(0, (hint_page - 1) if hint_page else 0)
@@ -95,9 +96,10 @@ def extract_toc_from_pdf(
                 if i + 1 < len(toc_lines):
                     next_line = toc_lines[i + 1]
                     # Check if next line is JUST a number
-                    if PAGE_NUM_RE.match(next_line):
+                    page_match = PAGE_NUM_RE.match(next_line)
+                    if page_match:
                         found_title = line
-                        found_page = PAGE_NUM_RE.match(next_line).group(1)
+                        found_page = page_match.group(1)
                         raw_context = f"{line} \n {next_line}"
                         i += 1  # Skip next line
 

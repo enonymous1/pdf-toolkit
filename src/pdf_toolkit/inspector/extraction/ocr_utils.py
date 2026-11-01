@@ -1,6 +1,6 @@
 import re
 
-import fitz
+import pymupdf
 
 try:
     # Configure tesseract path
@@ -38,7 +38,7 @@ def clean_ocr_token(text: str) -> str:
     return text
 
 
-def get_ocr_text_robust(page: fitz.Page, dpi: int = 400) -> str:
+def get_ocr_text_robust(page: pymupdf.Page, dpi: int = 400) -> str:
     """
     Enhanced OCR extraction using high DPI, noise removal, and coordinate-aware reconstruction.
     """
@@ -50,7 +50,7 @@ def get_ocr_text_robust(page: fitz.Page, dpi: int = 400) -> str:
         from PIL import Image
 
         # 1. High DPI Rendering for small text fidelity
-        pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csGRAY)
+        pix = page.get_pixmap(dpi=dpi, colorspace=pymupdf.csGRAY)
         img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w)
 
         # 2. Preprocessing
@@ -99,7 +99,7 @@ def get_ocr_text_robust(page: fitz.Page, dpi: int = 400) -> str:
 
         row_groups = []
         if not data.empty:
-            current_row = []
+            current_row: list = []
             # Use a tolerance for characters on the same line (approx 0.1 inch)
             y_tolerance = (dpi / 300) * 25
 
@@ -126,7 +126,7 @@ def get_ocr_text_robust(page: fitz.Page, dpi: int = 400) -> str:
             # Sort tokens in row by X coordinate
             sorted_row = sorted(row, key=lambda x: x["left"])
 
-            line_parts = []
+            line_parts: list[str] = []
             prev_right = -1
 
             for word_data in sorted_row:

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+from ..._defaults import TOC_HINT_PAGE
 
 
 class PDFAdapter(ABC):
@@ -12,7 +14,7 @@ class PDFAdapter(ABC):
             raise FileNotFoundError(f"PDF file not found: {file_path}")
 
     @abstractmethod
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Return standardized metadata dictionary."""
         pass
 
@@ -22,15 +24,15 @@ class PDFAdapter(ABC):
         pass
 
     @abstractmethod
-    def extract_text(self, page_range: Optional[str] = None) -> str:
+    def extract_text(self, page_range: str | None = None) -> str:
         """Extract text from specified pages or all pages."""
         pass
 
     @abstractmethod
-    def get_toc(self, use_ocr: bool = False, hint_page: int = 6) -> List[Dict[str, Any]]:
+    def get_toc(
+        self, use_ocr: bool = False, hint_page: int = TOC_HINT_PAGE
+    ) -> list[dict[str, Any]]:
         """Return Table of Contents entries."""
-        pass
-        pass
 
     @abstractmethod
     def close(self):
@@ -42,3 +44,4 @@ class PDFAdapter(ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+        return False

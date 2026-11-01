@@ -15,7 +15,7 @@ heuristic returns integer printed pages.
 
 from pathlib import Path
 
-import fitz
+import pymupdf
 import pytest
 
 from pdf_toolkit.inspector.toc.pdfminer import extract_toc_from_pdf as pdfminer_toc
@@ -24,7 +24,7 @@ from pdf_toolkit.inspector.toc.pypdf import extract_toc_from_pdf as pypdf_toc
 
 
 def make_toc_fixture(path: Path) -> Path:
-    doc = fitz.open()
+    doc = pymupdf.open()
     # Page 1: cover.
     page = doc.new_page()
     page.insert_text((72, 72), "Fixture PDF", fontsize=18)

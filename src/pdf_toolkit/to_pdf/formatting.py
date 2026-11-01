@@ -46,14 +46,9 @@ class Issue:
 
 
 def _require_docx():
-    try:
-        from docx import Document
-    except ImportError as exc:
-        raise ImportError(
-            "Checking .docx formatting needs python-docx. "
-            "Install it with: pip install 'pdf-toolkit[office]'"
-        ) from exc
-    return Document
+    from .._optional import require_docx
+
+    return require_docx("office", "Checking .docx formatting").Document
 
 
 def _group_runs(runs, predicate):

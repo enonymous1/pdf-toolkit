@@ -29,15 +29,9 @@ class CitationError(Exception):
 
 
 def _require_docx():
-    try:
-        from docx import Document
-    except ImportError as exc:
-        raise ImportError(
-            "Checking citations needs python-docx, which is not installed.\n"
-            "Install it with: pip install 'pdf-toolkit[citations]'\n"
-            f"(import error: {exc})"
-        ) from exc
-    return Document
+    from .._optional import require_docx
+
+    return require_docx("citations", "Checking citations").Document
 
 
 def extract_chunks_from_docx(
@@ -104,13 +98,13 @@ def extract_chunks_from_docx(
 
 def extract_pages_from_pdf(file_path: str | Path) -> list[SourcePage]:
     """Return one :class:`SourcePage` per PDF page (1-based numbers)."""
-    import fitz
+    import pymupdf
 
     path = Path(file_path)
     if not path.is_file():
         raise FileNotFoundError(f"PDF file not found: {file_path}")
     try:
-        doc = fitz.open(str(path))
+        doc = pymupdf.open(str(path))
     except Exception as exc:
         raise CitationError(f"Failed to open PDF '{file_path}': {exc}") from exc
     try:

@@ -1,5 +1,5 @@
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
@@ -8,6 +8,7 @@ from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfparser import PDFParser
 
+from ..._defaults import TOC_HINT_PAGE
 from ..core.base import PDFAdapter
 from ..utils import normalize_metadata
 
@@ -19,7 +20,7 @@ class PDFMinerAdapter(PDFAdapter):
         self.parser = PDFParser(self.fp)
         self.doc = PDFDocument(self.parser)
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         # pdfminer metadata is tricky (list of dicts)
         raw_info = self.doc.info[0] if self.doc.info else {}
         # convert bytes to str
@@ -40,7 +41,7 @@ class PDFMinerAdapter(PDFAdapter):
     def get_page_count(self) -> int:
         return len(list(PDFPage.create_pages(self.doc)))
 
-    def extract_text(self, page_range: Optional[str] = None) -> str:
+    def extract_text(self, page_range: str | None = None) -> str:
         rsrcmgr = PDFResourceManager()
         retstr = StringIO()
         device = TextConverter(rsrcmgr, retstr, laparams=LAParams())
@@ -52,7 +53,9 @@ class PDFMinerAdapter(PDFAdapter):
         retstr.close()
         return text
 
-    def get_toc(self, use_ocr: bool = False, hint_page: int = 6) -> List[Dict[str, Any]]:
+    def get_toc(
+        self, use_ocr: bool = False, hint_page: int = TOC_HINT_PAGE
+    ) -> list[dict[str, Any]]:
         # Returns native bookmarks if available
         try:
             outlines = self.doc.get_outlines()

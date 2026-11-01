@@ -21,8 +21,9 @@ import html
 import io
 from pathlib import Path
 
-import fitz
+import pymupdf
 
+from .._defaults import DEFAULT_DPI
 from .detect import require_cv2
 from .extract import extract_pages_to_bytes
 from .fieldmap import save_fieldmap
@@ -225,7 +226,7 @@ def export_html_to_file(html_text: str, out_path: str | Path) -> None:
     path.write_text(html_text, encoding="utf-8")
 
 
-def create_fillable_pdf_from_image(image, boxes: list[FieldBox], dpi: int = 150) -> bytes:
+def create_fillable_pdf_from_image(image, boxes: list[FieldBox], dpi: int = DEFAULT_DPI) -> bytes:
     """PDF bytes: the image as background, one AcroForm text field per box.
 
     Pixel coordinates (image rendered at *dpi*) are converted to PDF
@@ -274,7 +275,7 @@ def reconstruct_pdf_pages(
     pdf_path: str | Path,
     page_numbers: list[int],
     out_dir: str | Path,
-    dpi: int = 150,
+    dpi: int = DEFAULT_DPI,
 ) -> dict:
     """Detect fields and generate HTML overlay + fillable PDF per page.
 
@@ -293,7 +294,7 @@ def reconstruct_pdf_pages(
         d.mkdir(parents=True, exist_ok=True)
 
     try:
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
     except Exception as exc:
         raise ReconstructionError(f"Failed to open PDF '{pdf_path}': {exc}") from exc
     results: dict = {}

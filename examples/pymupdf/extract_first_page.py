@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def extract_first_page(src: str, dst: str) -> Path:
@@ -8,12 +8,12 @@ def extract_first_page(src: str, dst: str) -> Path:
     dst_p = Path(dst)
     dst_p.parent.mkdir(parents=True, exist_ok=True)
 
-    doc = fitz.open(src_p)
+    doc = pymupdf.open(src_p)
     if doc.page_count < 1:
         doc.close()
         raise ValueError("Source PDF has no pages")
 
-    new_doc = fitz.open()
+    new_doc = pymupdf.open()
     new_doc.insert_pdf(doc, from_page=0, to_page=0)
     new_doc.save(str(dst_p))
     new_doc.close()

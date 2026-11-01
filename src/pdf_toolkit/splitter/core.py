@@ -14,14 +14,19 @@ conflated.
 from __future__ import annotations
 
 import csv
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
 
 import pdfplumber
 from pypdf import PdfReader, PdfWriter
+from pypdf.generic import Destination
+
+from .._defaults import TOC_HINT_PAGE
 
 __all__ = [
     "Entry",
@@ -182,7 +187,9 @@ def extract_outline_entries(pdf_path: str | Path) -> tuple[list[Entry], list[str
         if not title:
             continue
         try:
-            page = reader.get_destination_page_number(obj)
+            # pypdf types this as Destination, but at runtime it also
+            # accepts the outline objects _walk_outlines yields.
+            page = reader.get_destination_page_number(cast(Destination, obj))
         except Exception:
             page = None
         if page is None:
@@ -197,7 +204,7 @@ def extract_outline_entries(pdf_path: str | Path) -> tuple[list[Entry], list[str
 
 
 def extract_text_toc_entries(
-    pdf_path: str | Path, hint_page: int = 6, offset: int = 0
+    pdf_path: str | Path, hint_page: int = TOC_HINT_PAGE, offset: int = 0
 ) -> tuple[list[Entry], list[str]]:
     """Extract entries from the printed TOC text via the inspector.
 
@@ -437,11 +444,17 @@ def split_pdf(
     overwrite: bool = False,
     preserve_metadata: bool = True,
 ) -> list[Path]:
-    """Write one PDF per proposed range. Nothing is written on failure.
+    """Write one PDF per proposed range.
 
     Existing output files block the whole split (``FileExistsError``)
     unless ``overwrite`` is set, so a re-run cannot silently clobber
     earlier output. Source document metadata is copied onto each chunk.
+
+    Generation is two-phase: every chapter is first written to a
+    temporary file, and only then are all of them renamed into place.
+    A failure while generating therefore leaves no chapter files at
+    all, instead of the first few chapters plus an error — the old
+    behaviour, which contradicted this docstring.
     """
     source = Path(pdf_path)
     output = Path(out_dir)
@@ -463,17 +476,42 @@ def split_pdf(
     metadata = None
     if preserve_metadata and reader.metadata:
         metadata = {str(k): str(v) for k, v in reader.metadata.items() if v is not None}
+    # Phase 1: generate every chapter to a staging temp file. Nothing
+    # at a final output path is touched here, so a failure while
+    # generating leaves no chapter files at all.
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for chapter, path in planned:
+            writer = PdfWriter()
+            if metadata:
+                writer.add_metadata(metadata)
+            for page_index in range(chapter.start, chapter.end + 1):
+                writer.add_page(reader.pages[page_index])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, tmp_name = tempfile.mkstemp(
+                prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent)
+            )
+            os.close(fd)
+            tmp_path = Path(tmp_name)
+            with tmp_path.open("wb") as fh:
+                writer.write(fh)
+            staged.append((tmp_path, path))
+    except Exception:
+        for tmp_path, _ in staged:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        raise
+    # Phase 2: rename every staged chapter into place.
     written: list[Path] = []
-    for chapter, path in planned:
-        writer = PdfWriter()
-        if metadata:
-            writer.add_metadata(metadata)
-        for page_index in range(chapter.start, chapter.end + 1):
-            writer.add_page(reader.pages[page_index])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("wb") as fh:
-            writer.write(fh)
-        written.append(path)
+    try:
+        for tmp_path, path in staged:
+            os.replace(tmp_path, path)
+            written.append(path)
+    except Exception:
+        for tmp_path, _ in staged:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        raise
     return written
 
 
@@ -482,7 +520,7 @@ def resolve_entries(
     csv_path: str | Path | None = None,
     headings_path: str | Path | None = None,
     toc_text: bool = False,
-    hint_page: int = 6,
+    hint_page: int = TOC_HINT_PAGE,
     offset: int = 0,
     fuzzy_headings: bool = False,
 ) -> tuple[list[Entry], str, list[str]]:
@@ -501,7 +539,7 @@ def resolve_entries(
         with Path(headings_path).open(encoding="utf-8") as fh:
             headings = [line.strip() for line in fh if line.strip()]
         located = locate_headings(pdf_path, headings, fuzzy=fuzzy_headings)
-        entries: list[Entry] = []
+        entries = []
         warnings = []
         for title, page in located:
             if page is None:

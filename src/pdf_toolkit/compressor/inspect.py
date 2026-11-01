@@ -8,14 +8,14 @@ analysis use :mod:`pdf_toolkit.inspector` instead.
 from pathlib import Path
 from typing import Any
 
-import fitz
+import pymupdf
 
 
 def quick_inspect(pdf_path: Path) -> dict[str, Any]:
     """Return basic structural facts about a PDF, or ``{}`` on failure."""
     pdf_path = Path(pdf_path)
     try:
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         try:
             info: dict[str, Any] = {
                 "name": pdf_path.name,
@@ -28,7 +28,9 @@ def quick_inspect(pdf_path: Path) -> dict[str, Any]:
                 info["object_count"] = doc.xref_length()
             except TypeError:  # older PyMuPDF exposed it as a property
                 info["object_count"] = getattr(doc, "xref_length", 0)
-            info["image_count"] = sum(len(page.get_images()) for page in doc)
+            info["image_count"] = sum(
+                len(doc.load_page(i).get_images()) for i in range(doc.page_count)
+            )
             return info
         finally:
             doc.close()

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def render_page_to_png(pdf_path: str, page_no: int = 0, out_path: str | None = None) -> Path:
@@ -31,9 +31,9 @@ def render_page_to_png(pdf_path: str, page_no: int = 0, out_path: str | None = N
                 from pdf_toolkit.inspector import unique_output_path
             out = unique_output_path(out)
 
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     page = doc[page_no]
-    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
     pix.save(str(out))
     doc.close()
     return out

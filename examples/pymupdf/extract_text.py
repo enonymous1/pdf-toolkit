@@ -1,8 +1,8 @@
-import fitz
+import pymupdf
 
 
 def extract_text(path: str) -> str:
-    doc = fitz.open(path)
+    doc = pymupdf.open(path)
     txt = "\n".join(p.get_text() for p in doc)
     doc.close()
     return txt

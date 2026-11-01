@@ -1,6 +1,4 @@
-from typing import Optional
-
-import fitz
+import pymupdf
 
 from .ocr_utils import get_ocr_text_robust
 
@@ -15,25 +13,43 @@ except ImportError:
     Converter = None
 
 
-def convert_to_html(pdf_path: str, output_path: str, pages: Optional[str] = None):
+def _page_indices(spec: str | None, total: int) -> range:
+    """Parse a page spec into 0-based page indexes.
+
+    ``None`` or ``"all"`` means every page, ``"3"`` means page 3, and
+    ``"2-5"`` means pages 2 through 5 (all 1-based, as on the CLI).
+    Anything else raises ValueError. This used to be copy-pasted into
+    each converter with a different silent fallback on bad input
+    (page 1 only, all pages, or defaults), so a typo silently exported
+    the wrong pages; now there is one parser and one failure mode.
+    """
+    if spec is None or spec == "all":
+        return range(total)
+    try:
+        if "-" in spec:
+            start, end = spec.split("-", 1)
+            start_i, end_i = int(start), int(end)
+            if start_i < 1 or end_i < start_i or end_i > total:
+                raise ValueError
+            return range(start_i - 1, end_i)
+        page_i = int(spec)
+        if page_i < 1 or page_i > total:
+            raise ValueError
+        return range(page_i - 1, page_i)
+    except ValueError:
+        raise ValueError(
+            f"Invalid page spec {spec!r} for a {total}-page PDF "
+            "(expected 'all', a page number, or 'start-end')"
+        ) from None
+
+
+def convert_to_html(pdf_path: str, output_path: str, pages: str | None = None):
     """Convert PDF to HTML using PyMuPDF."""
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     # Basic HTML export
     html_content = ""
 
-    # Handle page range
-    page_range = []
-    if pages == "all" or not pages:
-        page_range = range(doc.page_count)
-    else:
-        try:
-            if "-" in pages:
-                s, e = pages.split("-")
-                page_range = range(int(s) - 1, int(e))
-            else:
-                page_range = [int(pages) - 1]
-        except ValueError:
-            page_range = [0]
+    page_range = _page_indices(pages, doc.page_count)
 
     for p_idx in page_range:
         if 0 <= p_idx < doc.page_count:
@@ -47,9 +63,9 @@ def convert_to_html(pdf_path: str, output_path: str, pages: Optional[str] = None
 
 def convert_to_markdown(
     pdf_path: str,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     use_ocr: bool = False,
-    pages: Optional[str] = None,
+    pages: str | None = None,
 ) -> str:
     """
     Convert PDF to Markdown.
@@ -74,25 +90,13 @@ def convert_to_markdown(
 
 
 def convert_to_markdown_ocr(
-    pdf_path: str, output_path: Optional[str] = None, pages: Optional[str] = None
+    pdf_path: str, output_path: str | None = None, pages: str | None = None
 ) -> str:
     """Robust OCR-based Markdown conversion for scanned documents."""
-    doc = fitz.open(pdf_path)
+    doc = pymupdf.open(pdf_path)
     md_content = []
 
-    # Handle page range
-    page_range = []
-    if pages == "all" or not pages:
-        page_range = range(doc.page_count)
-    else:
-        try:
-            if "-" in pages:
-                s, e = pages.split("-")
-                page_range = range(int(s) - 1, int(e))
-            else:
-                page_range = [int(pages) - 1]
-        except ValueError:
-            page_range = range(doc.page_count)
+    page_range = _page_indices(pages, doc.page_count)
 
     total_to_process = len(page_range)
     print(f"Starting OCR conversion for {total_to_process} pages...")
@@ -123,27 +127,22 @@ def convert_to_markdown_ocr(
     return full_md
 
 
-def convert_to_docx(pdf_path: str, output_path: str, pages: Optional[str] = None):
+def convert_to_docx(pdf_path: str, output_path: str, pages: str | None = None):
     """Convert PDF to DOCX using pdf2docx."""
     if not Converter:
         raise ImportError("pdf2docx is not installed.")
 
     cv = Converter(pdf_path)
-
-    start_page = 0
-    end_page = None
-
-    if pages:
-        if "-" in pages:
-            s, e = pages.split("-")
-            start_page = int(s) - 1
-            end_page = int(e)
+    try:
+        # pdf2docx takes start (0-based, inclusive) and end (exclusive);
+        # for the whole document both stay at their defaults.
+        if pages is None or pages == "all":
+            start_page, end_page = 0, None
         else:
-            try:
-                start_page = int(pages) - 1
-                end_page = start_page + 1
-            except ValueError:
-                pass  # Use defaults for 'all'
-
-    cv.convert(output_path, start=start_page, end=end_page)
-    cv.close()
+            # _page_indices needs a page count it does not have yet, so
+            # validate the shape here and let pdf2docx bound-check it.
+            indices = _page_indices(pages, 10**9)
+            start_page, end_page = indices.start, indices.stop
+        cv.convert(output_path, start=start_page, end=end_page)
+    finally:
+        cv.close()

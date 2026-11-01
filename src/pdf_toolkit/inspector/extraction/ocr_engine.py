@@ -1,7 +1,4 @@
-from typing import List, Optional
-
-
-def extract_text_via_ocr(pdf_path: str, pages: Optional[List[int]] = None, dpi: int = 300) -> str:
+def extract_text_via_ocr(pdf_path: str, pages: list[int] | None = None, dpi: int = 300) -> str:
     """
     Perform a high-quality OCR conversion by first rendering pages to images.
     Best for 'Scanned PDFs' that fail simple text extraction.

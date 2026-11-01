@@ -1,4 +1,8 @@
-from typing import Dict, List, Optional
+import logging
+
+from ..._defaults import TOC_HINT_PAGE
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_title(t):
@@ -11,18 +15,19 @@ def _normalize_title(t):
 
 
 def extract_toc_from_pdf(
-    path: str, hint_page: Optional[int] = 6, scan_after: int = 3
-) -> List[Dict]:
+    path: str, hint_page: int | None = TOC_HINT_PAGE, scan_after: int = 3
+) -> list[dict]:
     """Attempt to extract outlines/TOC from a PDF using pdfminer low-level APIs.
 
-    Returns list of {title: str, page: Optional[int], raw: object}
+    Returns list of {title: str, page: int | None, raw: object}
     """
     entries = []
     try:
         from pdfminer.pdfdocument import PDFDocument
         from pdfminer.pdfpage import PDFPage
         from pdfminer.pdfparser import PDFParser
-    except Exception:
+    except Exception as exc:
+        logger.warning("pdfminer TOC extraction unavailable: %s", exc)
         return []
 
     try:
@@ -71,7 +76,8 @@ def extract_toc_from_pdf(
                         page_num = None
 
                 entries.append({"title": title or "", "page": page_num, "raw": item})
-    except Exception:
+    except Exception as exc:
+        logger.warning("pdfminer TOC extraction unavailable: %s", exc)
         return []
 
     # if outlines were not found, return empty and let caller consider a text-based fallback

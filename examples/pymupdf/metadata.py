@@ -1,10 +1,10 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def read_metadata(path: str) -> dict:
-    doc = fitz.open(path)
+    doc = pymupdf.open(path)
     meta = doc.metadata or {}
     n_pages = doc.page_count
 

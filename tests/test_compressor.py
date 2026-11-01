@@ -72,9 +72,9 @@ def test_pypdf_compression_round_trip(sample: Path, tmp_path: Path):
     assert out.exists()
     assert quick_inspect(out)["page_count"] == 3
     # Metadata is kept by default.
-    import fitz
+    import pymupdf
 
-    assert fitz.open(str(out)).metadata is not None
+    assert pymupdf.open(str(out)).metadata is not None
 
 
 def test_compress_dispatch_and_unknown_method(sample: Path, tmp_path: Path):

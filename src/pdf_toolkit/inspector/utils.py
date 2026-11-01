@@ -1,5 +1,8 @@
+import logging
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def unique_output_path(path: Path) -> Path:
@@ -64,7 +67,8 @@ def extract_xmp_from_file(path: str) -> str | None:
     """Best-effort: scan file bytes for XMP XML block and return as string."""
     try:
         b = Path(path).read_bytes()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Could not read %s for XMP extraction: %s", path, exc)
         return None
     start = b.find(b"<x:xmpmeta")
     if start == -1:

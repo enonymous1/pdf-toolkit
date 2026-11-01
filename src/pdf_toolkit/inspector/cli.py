@@ -13,15 +13,18 @@ matter for a publishable package:
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table as RichTable
 
+from .._defaults import TOC_HINT_PAGE
 from .adapters.pymupdf import PyMuPDFAdapter
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def create_parser(parser: argparse.ArgumentParser | None = None) -> argparse.ArgumentParser:
@@ -52,7 +55,9 @@ def create_parser(parser: argparse.ArgumentParser | None = None) -> argparse.Arg
     config.add_argument(
         "--page", type=str, default="1", help="Page(s) to process (e.g. '1', '1-5', 'all')"
     )
-    config.add_argument("--hint", type=int, default=6, help="Hint page where TOC starts")
+    config.add_argument(
+        "--hint", type=int, default=TOC_HINT_PAGE, help="Hint page where TOC starts"
+    )
     config.add_argument("--output", type=str, help="Output file path for export")
     config.add_argument("--json", action="store_true", help="Output as JSON (for terminal modes)")
     config.add_argument("--ocr", action="store_true", help="Enable OCR for TOC/Text (if supported)")
@@ -167,6 +172,9 @@ def run_inspect(args: argparse.Namespace) -> int:
         console.print(f"[bold red]Error:[/bold red] {exc}")
         return 1
     except Exception as exc:
+        # The message stays user-facing; the traceback goes to logging
+        # so --verbose (which configures logging) can show what failed.
+        logger.exception("inspect failed for %s", path)
         console.print(f"[bold red]Error:[/bold red] {exc}")
         return 1
 

@@ -22,7 +22,11 @@ pypdf's private ``_root_object``:
 from __future__ import annotations
 
 import io
+from typing import cast
 
+from pypdf.generic import DictionaryObject
+
+from .._defaults import DEFAULT_DPI
 from .models import FieldBox
 
 __all__ = ["FillError", "fill_pdf_fields"]
@@ -70,7 +74,7 @@ def _try_acroform_fill(pdf_bytes: bytes, data: dict[str, str]) -> bytes | None:
 
     reader = PdfReader(io.BytesIO(pdf_bytes))
     try:
-        acro = reader.trailer["/Root"].get("/AcroForm")
+        acro = cast(DictionaryObject, reader.trailer["/Root"]).get("/AcroForm")
     except Exception:
         return None
     if acro is None:
@@ -108,10 +112,10 @@ def _values_written(pdf_bytes: bytes, data: dict[str, str]) -> bool:
 def _overlay_fill(
     pdf_bytes: bytes, data: dict[str, str], fields: dict[int, list[FieldBox]], dpi: int
 ) -> bytes:
-    import fitz
+    import pymupdf
 
     try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
     except Exception as exc:
         raise FillError(f"Failed to open PDF for overlay fill: {exc}") from exc
     try:
@@ -128,7 +132,7 @@ def _overlay_fill(
                 y = f.y * 72.0 / dpi
                 w = f.w * 72.0 / dpi
                 h = f.h * 72.0 / dpi
-                rect = fitz.Rect(x, y, x + w, y + h)
+                rect = pymupdf.Rect(x, y, x + w, y + h)
                 # insert_textbox returns negative when the text does not
                 # fit at that size and inserts nothing; a fixed 10pt font
                 # silently dropped values in short boxes, so shrink to fit.
@@ -146,7 +150,7 @@ def fill_pdf_fields(
     pdf_bytes: bytes,
     data: dict[str, str],
     fields: list[FieldBox] | dict[int, list[FieldBox]] | None = None,
-    dpi: int = 150,
+    dpi: int = DEFAULT_DPI,
 ) -> bytes:
     """Fill *data* (``field_name -> value``) into *pdf_bytes*.
 

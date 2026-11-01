@@ -7,40 +7,42 @@ needs a Java runtime; its failure is reported as an ImportError with a
 plain-language hint instead of a stack trace from deep inside Java.
 """
 
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def extract_tables_camelot(pdf_path: str, pages: str = "1"):
     """Extract tables with Camelot (lattice, falling back to stream)."""
-    try:
-        import camelot
-    except ImportError as exc:
-        raise ImportError(
-            "Camelot is not installed. Install the tables extra: pip install 'pdf-toolkit[tables]'"
-        ) from exc
+    from .._optional import require_module
+
+    camelot = require_module("camelot", extra="tables", purpose="Camelot table extraction")
     try:
         tables = camelot.read_pdf(pdf_path, pages=pages, flavor="lattice")
         if len(tables) == 0:
             tables = camelot.read_pdf(pdf_path, pages=pages, flavor="stream")
         return [t.df for t in tables]
     except Exception as exc:
-        print(f"Camelot error: {exc}")
+        logger.warning("Camelot extraction failed: %s", exc)
         return []
 
 
 def extract_tables_tabula(pdf_path: str, pages: str = "all"):
     """Extract tables with tabula-py (requires Java)."""
-    try:
-        import tabula
-    except ImportError as exc:
-        raise ImportError(
-            "tabula-py is not installed. Install the tables extra: "
-            "pip install 'pdf-toolkit[tables]' (tabula-py also needs Java)"
-        ) from exc
+    from .._optional import require_module
+
+    tabula = require_module(
+        "tabula",
+        extra="tables",
+        purpose="Tabula table extraction",
+        message="tabula-py is not installed. Install the tables extra: "
+        "pip install 'pdf-toolkit[tables]' (tabula-py also needs Java)",
+    )
     try:
         return tabula.read_pdf(pdf_path, pages=pages, multiple_tables=True)
     except Exception as exc:
-        print(f"Tabula error: {exc}")
+        logger.warning("Tabula extraction failed: %s", exc)
         return []
 
 

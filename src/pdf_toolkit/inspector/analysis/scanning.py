@@ -1,9 +1,9 @@
-from typing import Any, Dict
+from typing import Any
 
-import fitz
+import pymupdf
 
 
-def analyze_page_scanning(page: fitz.Page) -> Dict[str, Any]:
+def analyze_page_scanning(page: pymupdf.Page) -> dict[str, Any]:
     """Analyze a single page to determine if it is likely a scanned image."""
     text = page.get_text("text").strip()
     words = page.get_text("words")
@@ -32,7 +32,7 @@ def analyze_page_scanning(page: fitz.Page) -> Dict[str, Any]:
     }
 
 
-def analyze_document_scanning(doc: fitz.Document, sample_pages: int = 10) -> Dict[str, Any]:
+def analyze_document_scanning(doc: pymupdf.Document, sample_pages: int = 10) -> dict[str, Any]:
     """Analyze the whole document for scanning indicators."""
     total_pages = doc.page_count
     check_limit = min(total_pages, sample_pages)

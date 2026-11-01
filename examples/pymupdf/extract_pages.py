@@ -1,16 +1,16 @@
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 
 def extract_pages(src: str, dst: str, start_idx: int, end_idx: int) -> Path:
-    doc = fitz.open(src)
+    doc = pymupdf.open(src)
     total = doc.page_count
     if start_idx < 0 or end_idx >= total or start_idx > end_idx:
         doc.close()
         raise ValueError("page range out of bounds")
 
-    new = fitz.open()
+    new = pymupdf.open()
     new.insert_pdf(doc, from_page=start_idx, to_page=end_idx)
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
     new.save(str(dst))
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     import argparse
     from pathlib import Path
 
-    parser = argparse.ArgumentParser(description="Extract pages from a PDF using PyMuPDF (fitz)")
+    parser = argparse.ArgumentParser(description="Extract pages from a PDF using PyMuPDF")
     parser.add_argument("pdf", help="source PDF path")
     parser.add_argument("--start", type=int, required=True, help="start page (1-indexed)")
     parser.add_argument("--end", type=int, help="end page (inclusive, 1-indexed)")
@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     from pdf_toolkit.inspector import parse_page_range, unique_output_path
 
-    total = fitz.open(str(src)).page_count
+    total = pymupdf.open(str(src)).page_count
     try:
         s0, e0 = parse_page_range(total, start=args.start, end=args.end, count=args.count)
     except ValueError as exc:

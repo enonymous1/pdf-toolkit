@@ -1,10 +1,10 @@
 # helper utilities for extracting detailed information using PyMuPDF
 from typing import Any
 
-import fitz
+import pymupdf
 
 
-def collect_details(doc: fitz.Document) -> dict[str, Any]:
+def collect_details(doc: pymupdf.Document) -> dict[str, Any]:
     pages = []
     total_text_len = 0
     fonts = set()
